@@ -22,7 +22,7 @@ RANDOM_STR=$(cat /dev/urandom | tr -dc 'a-zA-Z' | fold -w 6 | head -n 1)
 
 get_available_port() {
     local start_range=$1  # 起始端口范围
-    local end_range=$2    # 结束端口范围
+    local end_range=$2    # 结束端口范围提交
     
     # 在指定范围内随机选择可用端口
     while true; do
