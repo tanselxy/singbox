@@ -1,4 +1,10 @@
 #!/bin/bash
+# 定义颜色
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color (重置颜色)
 # 下载服务端口默认为8080
 PORT=14567
 #ss端口
@@ -30,7 +36,7 @@ get_available_port() {
 
 generate_strong_password() {
   local password
-  local char_set="ABCDEFGHIJKLMN!+&*OPQRSTU!+&*VWXYZabcd!+&*efghijklmnopq!+&*rstuvwxyz0123456789!+&*"
+  local char_set="ABCDEF123456GHIJKLMN!+&*OPQRS12345TU!+&*VWX456YZabcd!+&*efghijk789lmnopq!+&*rstuvwxyz0123456789!+&*"
   local password_length=15
 
   # 使用/dev/urandom直接生成指定长度的随机密码
@@ -41,7 +47,7 @@ generate_strong_password() {
 
 
 
-# 安装 Sing-Box
+# 更新系统软件安装Sing-Box
 install_singbox() {
   echo "更新升级系统软件包..."
   sudo apt update && sudo apt upgrade -y
@@ -211,18 +217,33 @@ cleanup_task() {
 }
 
 enable_bbr() {
-    echo "正在开启BBR加速..."
+    
+    
+    # 加载必要模块
+    modprobe tcp_bbr
+    
+    # 设置 BBR
     echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
     echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
     sysctl -p
 
-    # 验证BBR是否开启
-    echo "验证BBR状态:"
-    sysctl net.ipv4.tcp_congestion_control
-    lsmod | grep bbr
-
-    echo "BBR加速已开启并生效"
+    # 验证 BBR 状态
+    if [[ $(sysctl net.ipv4.tcp_congestion_control | grep bbr) && $(lsmod | grep bbr) ]]; then
+        echo "BBR 已成功启用"
+    else 
+        echo "BBR 启用失败，请检查系统配置"
+    fi
 }
+
+optimize_network() {
+    cat >> /etc/sysctl.conf <<EOF
+net.ipv4.tcp_fastopen=3
+net.ipv4.tcp_slow_start_after_idle=0
+net.ipv4.tcp_notsent_lowat=16384
+EOF
+    sysctl -p
+}
+
 
 
 checkDomin() {
@@ -932,12 +953,14 @@ main() {
   generate_qr_code
   enable_and_start_service
   enable_bbr
+  #优化网络
+  optimize_network
   # 启动清除任务
   cleanup_task &
   #修改ssh端口为40001
   change_ssh_port
   #serve_download
-  echo "所有配置完成，10分钟后清除所有对外配置文件！"
+  echo -e "${YELLOW}所有配置完成，10分钟后清除所有对外配置文件！${NC}"
 }
 
 main
