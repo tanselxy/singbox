@@ -265,7 +265,7 @@ checkDomin() {
         SERVER="www.mediamarkt.de"
         ;;
       HK)
-        SERVER="www.hktvmall.com"
+        SERVER="www.pns.hk"
         ;;
       *)
         SERVER="www.apple.com"
