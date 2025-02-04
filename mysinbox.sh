@@ -465,23 +465,35 @@ configure_singbox() {
     }${CHATGPT_OUTBOUND}
   ],
   "route": {
-    "geoip": {
-      "download_url": "https://github.com/SagerNet/sing-geoip/releases/latest/download/geoip.db",
-      "download_detour": "direct"
-    },
-    "geosite": {
-      "download_url": "https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite.db",
-      "download_detour": "direct"
-    },
     "rules": [
-      $CHATGPT_RULES
-    ],
-    "rule_set": [
       {
-        "tag": "geosite-chatgpt",
+        "protocol": ["http", "https"],
+        "domain": ["chat.openai.com"],
+        "outbound": "warp"
+      },
+      {
+        "geosite": ["cn"],
+        "geoip": ["cn"],
+        "outbound": "direct"
+      },
+      {
+        "geosite": ["category-ads-all"],
+        "outbound": "block"
+      }
+    ],
+    "rule_sets": [
+      {
+        "tag": "geoip",
         "type": "remote",
         "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-openai.srs",
+        "url": "https://github.com/SagerNet/sing-geoip/releases/latest/download/geoip.db",
+        "download_detour": "direct"
+      },
+      {
+        "tag": "geosite",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite.db",
         "download_detour": "direct"
       }
     ]
