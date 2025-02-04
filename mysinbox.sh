@@ -472,28 +472,34 @@ configure_singbox() {
         "outbound": "warp"
       },
       {
-        "geosite": ["cn"],
-        "geoip": ["cn"],
+        "rule_set": ["private", "cn"],
         "outbound": "direct"
       },
       {
-        "geosite": ["category-ads-all"],
+        "rule_set": ["category-ads-all"],
         "outbound": "block"
       }
     ],
-    "rule_sets": [
+    "rule_set": [
       {
-        "tag": "geoip",
+        "tag": "cn",
         "type": "remote",
         "format": "binary",
-        "url": "https://github.com/SagerNet/sing-geoip/releases/latest/download/geoip.db",
+        "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs",
         "download_detour": "direct"
       },
       {
-        "tag": "geosite",
+        "tag": "private",
         "type": "remote",
         "format": "binary",
-        "url": "https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite.db",
+        "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-private.srs",
+        "download_detour": "direct"
+      },
+      {
+        "tag": "category-ads-all",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads.srs",
         "download_detour": "direct"
       }
     ]
