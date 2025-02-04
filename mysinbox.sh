@@ -367,11 +367,11 @@ configure_singbox() {
     ],
     "rules": [
       {
-        "geosite": "cn",
+        "rule_set": ["cn"],
         "server": "local"
       },
       {
-        "geosite": "category-ads-all",
+        "rule_set": ["category-ads-all"],
         "server": "block",
         "disable_cache": true
       }
