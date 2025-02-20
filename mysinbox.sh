@@ -154,11 +154,16 @@ change_ssh_port() {
 
 #执行faild2ban
 excute_fail2ban() {
-  # ...
-  install_fail2ban
-  configure_fail2ban
-  start_fail2ban
-  # ...
+     # 提示用户是否安装 fail2ban
+  read -p "是否安装并配置 fail2ban? (y/n) [n]: " INSTALL_FAIL2BAN
+  INSTALL_FAIL2BAN=${INSTALL_FAIL2BAN:-n}  # 默认选择是不安装
+  if [[ "$INSTALL_FAIL2BAN" =~ ^[Yy]$ ]]; then
+    install_fail2ban
+    configure_fail2ban
+    start_fail2ban
+  else
+    echo "跳过 fail2ban 安装和配置。"
+  fi
 }
 
 
@@ -962,6 +967,9 @@ main() {
   ssPort=$(get_available_port 31000 40000)
   hysteriaPort=$(get_available_port 50000 60000)
   hysteriaPassword=$(generate_strong_password)
+
+ 
+
   excute_fail2ban
   install_singbox
   configure_singbox
