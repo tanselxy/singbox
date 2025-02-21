@@ -115,6 +115,11 @@ start_fail2ban() {
 }
 
 change_ssh_port() {
+
+  # 提示用户是否安装 fail2ban
+  read -p "是否修改端口? (y/n) [n]: " INSTALL_FAIL2BAN
+  INSTALL_FAIL2BAN=${INSTALL_FAIL2BAN:-n}  # 默认选择是不修改端口
+  if [[ "$INSTALL_FAIL2BAN" =~ ^[Yy]$ ]]; then
     echo "正在修改 SSH 端口..."
     
     # 先安装 SSH 服务器
@@ -148,22 +153,20 @@ change_ssh_port() {
     
     echo "SSH 端口已修改为: $NEW_SSH_PORT"
     echo "请使用新端口进行 SSH 连接"
+  else
+    echo "跳过 SSH 端口修改。"
+  fi
 }
 
 
 
 #执行faild2ban
 excute_fail2ban() {
-     # 提示用户是否安装 fail2ban
-  read -p "是否安装并配置 fail2ban? (y/n) [n]: " INSTALL_FAIL2BAN
-  INSTALL_FAIL2BAN=${INSTALL_FAIL2BAN:-n}  # 默认选择是不安装
-  if [[ "$INSTALL_FAIL2BAN" =~ ^[Yy]$ ]]; then
+
     install_fail2ban
     configure_fail2ban
     start_fail2ban
-  else
-    echo "跳过 fail2ban 安装和配置。"
-  fi
+
 }
 
 
