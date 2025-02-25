@@ -608,17 +608,17 @@ generate_qr_code() {
 generate_client_config() {
   CONFIG_PATH="/root/singbox_${RANDOM_STR}.yaml"
 
-  # 获取当前机器的公网 IP
+    # 获取当前机器的公网 IP
   SERVER_IP=$(curl -4 -s ifconfig.me || curl -4 -s ipinfo.io/ip)
   if [[ -z "$SERVER_IP" ]]; then
-    echo "无法获取 IPv4 地址，尝试获取 IPv6 地址..."
-    SERVER_IP=$(curl -6 -s ifconfig.me || curl -6 -s ipinfo.io/ip || curl -6 -s api64.ipify.org)
-    if [[ -z "$SERVER_IP" ]]; then
-      echo "无法获取服务器的公网 IPv6 地址，请检查网络连接。"
-      exit 1
-    #echo "无法获取服务器的公网 IP 地址，请检查网络连接。"
-    #exit 1
-    fi
+      echo "无法获取 IPv4 地址，尝试获取 IPv6 地址..."
+      SERVER_IP=$(curl -6 -s ifconfig.me || curl -6 -s ipinfo.io/ip || curl -6 -s api64.ipify.org)
+      if [[ -z "$SERVER_IP" ]]; then
+          echo "无法获取服务器的公网 IPv6 地址，请检查网络连接。"
+          exit 1
+          #echo "无法获取服务器的公网 IP 地址，请检查网络连接。"
+          #exit 1
+      fi
   fi
 
   # 使用之前输入的 SERVER 值
