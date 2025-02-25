@@ -618,6 +618,7 @@ generate_client_config() {
       exit 1
     #echo "无法获取服务器的公网 IP 地址，请检查网络连接。"
     #exit 1
+    fi
   fi
 
   # 使用之前输入的 SERVER 值
