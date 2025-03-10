@@ -441,6 +441,27 @@ configure_singbox() {
       }
     },
     {
+      "type": "trojan",
+      "tag": "trojan-in",
+      "listen": "::",
+      "listen_port": 63333,
+      "users": [
+        {
+          "password": "$hysteriaPassword"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "bing.com",
+        "certificate_path": "/etc/sing-box/cert/cert.pem",
+        "key_path": "/etc/sing-box/cert/private.key"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/trojan"
+      }
+    },
+    {
       "sniff": true,
       "sniff_override_destination": true,
       "type": "hysteria2",
@@ -564,6 +585,26 @@ generate_hy2_link() {
   echo ""
   echo ""
   echo "$hy_LINK"
+  echo ""
+  echo ""
+  echo -e "\033[31m========================================================\033[0m"
+}
+
+generate_trojan_link() {
+  # 使用之前已经获取的值
+  trojan_domain="bing.com"
+  trojan_password="$hysteriaPassword"
+  trojan_PORT=63333
+  trojan_IP="$SERVER_IP"
+
+  # 生成 by 链接
+  trojan_LINK="trojan://${trojan_password}@${trojan_IP}:${trojan_PORT}?sni=bing.com&type=ws&path=%2Ftrojan&host=bing.com&skipCertVerify=true&udp=true&alpn=http%2F1.1"
+  echo ""
+  echo ""
+  echo -e "\033[31m==================trojan 链接：==========================\033[0m"
+  echo ""
+  echo ""
+  echo "$trojan_LINK"
   echo ""
   echo ""
   echo -e "\033[31m========================================================\033[0m"
@@ -859,6 +900,21 @@ proxies:
   skip-cert-verify: true
   alpn:
     - h3
+- name: DMIT-Trojan
+  type: trojan
+  server: $SERVER_IP
+  port: 63333
+  password: $hysteriaPassword
+  udp: true
+  sni: bing.com
+  alpn:
+    - http/1.1
+  skip-cert-verify: true
+  network: ws
+  ws-opts:
+    path: /trojan
+    headers:
+      Host: bing.com
 proxy-groups:
 - name: PROXY
   type: select
@@ -988,6 +1044,7 @@ main() {
   provide_download_link
   generate_v2ray_link
   generate_hy2_link
+  generate_trojan_link
   generate_qr_code
   enable_and_start_service
   enable_bbr
