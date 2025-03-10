@@ -587,7 +587,6 @@ generate_hy2_link() {
   echo "$hy_LINK"
   echo ""
   echo ""
-  echo -e "\033[31m========================================================\033[0m"
 }
 
 generate_trojan_link() {
@@ -598,7 +597,7 @@ generate_trojan_link() {
   trojan_IP="$SERVER_IP"
 
   # 生成 by 链接
-  trojan_LINK="trojan://${trojan_password}@${trojan_IP}:${trojan_PORT}?sni=bing.com&type=ws&path=%2Ftrojan&host=bing.com&skipCertVerify=true&udp=true&alpn=http%2F1.1"
+  trojan_LINK="trojan://${trojan_password}@${trojan_IP}:${trojan_PORT}?sni=bing.com&type=ws&path=%2Ftrojan&host=bing.com&allowInsecure=1&udp=true&alpn=http%2F1.1"
   echo ""
   echo ""
   echo -e "\033[31m==================trojan 链接：==========================\033[0m"
@@ -639,6 +638,13 @@ generate_qr_code() {
 
   echo "hy二维码已生成，请扫描以下二维码："
   qrencode -t ANSIUTF8 "$hy_LINK"
+
+  echo -e "\033[31m============================================\033[0m"
+  echo ""
+  echo ""
+
+  echo "trojan二维码已生成，请扫描以下二维码："
+  qrencode -t ANSIUTF8 "$trojan_LINK"
 
   echo "二维码生成完成！"
 }
