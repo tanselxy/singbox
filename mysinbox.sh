@@ -273,7 +273,7 @@ checkDomin() {
         SERVER="www.mediamarkt.de"
         ;;
       HK)
-        SERVER="www.pns.hk"
+        SERVER="www.hkbu.edu.hk"
         ;;
       *)
         SERVER="www.apple.com"
@@ -906,7 +906,7 @@ proxies:
   skip-cert-verify: true
   alpn:
     - h3
-- name: DMIT-Trojan
+- name: Trojan
   type: trojan
   server: $SERVER_IP
   port: 63333
@@ -927,6 +927,7 @@ proxy-groups:
   proxies:
     - reality
     - Hysteria2
+    - Trojan
 rule-providers:
   reject:
     type: http
