@@ -674,6 +674,25 @@ generate_ss2022_link() {
   echo -e "\033[31m========================================================\033[0m"
 }
 
+generate_ss_link() {
+  # 使用之前已经获取的值
+
+  ss_IP="$SERVER_IP"
+  ss_password="$hysteriaPassword"
+  ss_encoded=$(echo -n "aes-128-gcm:${ss_password}" | base64)
+ 
+  ss_LINK=“ss://${ss_encoded}@${ss_IP}:59000#专线ss”
+  echo ""
+  echo ""
+  echo -e "\033[31m==================ss 链接：==========================\033[0m"
+  echo ""
+  echo ""
+  echo "$ss_LINK"
+  echo ""
+  echo ""
+  echo -e "\033[31m========================================================\033[0m"
+}
+
 generate_base64() {
   local length="$1"
   
@@ -763,6 +782,13 @@ generate_qr_code() {
 
   echo "ss2022二维码已生成，请扫描以下二维码："
   qrencode -t ANSIUTF8 "$ss2022_LINK"
+
+  echo -e "\033[31m============================================\033[0m"
+  echo ""
+  echo ""
+
+  echo "ss专线二维码已生成，请扫描以下二维码："
+  qrencode -t ANSIUTF8 "$ss_LINK"
 
   echo "二维码生成完成！"
 }
@@ -1193,6 +1219,7 @@ main() {
   generate_trojan_link
   generate_tuic_link
   generate_ss2022_link
+  generate_ss_link
   generate_qr_code
   enable_and_start_service
   enable_bbr
