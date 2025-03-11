@@ -414,6 +414,26 @@ configure_singbox() {
       "password": "Aq2bNFEAtpW8EQcLmU5v43cxyYDHlh6U7qg5NHxS51w="
     },
     {
+      "type": "tuic",
+      "tag": "tuic-in",
+      "listen": "::",
+      "listen_port": 8443,
+      "users": [
+        {
+          "name": "username",
+          "uuid": "$uuid",
+          "password": "Aq2bNFEAtpW8EQcLmU5v43cxyYDHlh6U7qg5NHxS51w="
+        }
+      ],
+      "congestion_control": "bbr",
+      "tls": {
+        "enabled": true,
+        "server_name": "bing.com",
+        "certificate_path": "/etc/sing-box/cert/cert.pem",
+        "key_path": "/etc/sing-box/cert/private.key"
+      }
+    },
+    {
       "type": "vless",
       "tag": "vless-in",
       "listen": "::",
