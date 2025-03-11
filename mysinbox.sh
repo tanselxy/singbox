@@ -411,7 +411,7 @@ configure_singbox() {
       "listen": "127.0.0.1",
       "network": "tcp",
       "method": "2022-blake3-chacha20-poly1305",
-      "password": "Aq2bNFEAtpW8EQcLmU5v43cxyYDHlh6U7qg5NHxS51w="
+      "password": $hysteriaPassword
     },
     {
   "type": "tuic",
@@ -917,12 +917,12 @@ proxies:
   server: $SERVER_IP
   port: $ssPort
   cipher: 2022-blake3-chacha20-poly1305
-  password: "Nq2bNFEAtpW8EQcLmU5v43cxyYDHlh6U7qg5NHxS51w="
+  password: $hysteriaPassword
   plugin: shadow-tls
   client-fingerprint: chrome
   plugin-opts:
     host: "$SERVER"
-    password: "BaaY/lgWSBlSQtDmd0UpFnqR1JJ9JTHn0CLBv12KO5o="
+    password: "AaaY/lgWSBlSQtDmd0UpFnqR1JJ9JTHn0CLBv12KO5o="
     version: 3
 - name: reality
   type: vless
