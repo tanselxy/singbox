@@ -311,8 +311,8 @@ configure_singbox() {
   #获取域名
   checkDomin
   # 询问是否启用 ChatGPT 分流
-  read -p "是否启用 ChatGPT 分流? (y/n) [n]: " ENABLE_CHATGPT
-  ENABLE_CHATGPT=${ENABLE_CHATGPT:-n}  # 如果用户直接回车，默认值为 n
+  # read -p "是否启用 ChatGPT 分流? (y/n) [n]: " ENABLE_CHATGPT
+  ENABLE_CHATGPT="n"  # 如果用户直接回车，默认值为 n
 
   # 准备路由规则
   if [[ "${ENABLE_CHATGPT}" == "y" ]]; then
@@ -978,7 +978,7 @@ dns:
       - "+.githubusercontent.com"
       - "+.googlevideo.com"
 proxies:
-- name: ShadowTLS v3
+- name: ShadowTLS-v3
   type: ss
   server: $SERVER_IP
   port: $ssPort
