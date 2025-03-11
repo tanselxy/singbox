@@ -1167,7 +1167,7 @@ main() {
   enable_bbr
   #优化网络
   optimize_network
-  # 启动清除任务
+  # 启动清除任务a
   cleanup_task &
   #修改ssh端口为40001
   change_ssh_port
