@@ -653,7 +653,7 @@ generate_ss2022_link() {
   ss2022_HOST="$SERVER"
 
   # 生成 V2Ray 链接
-  ss2022_LINK= $(convert_to_sslink)
+  ss2022_LINK= "$(convert_to_sslink)"
   echo ""
   echo ""
   echo -e "\033[31m==================ss2022 链接：==========================\033[0m"
@@ -662,7 +662,7 @@ generate_ss2022_link() {
   echo "$ss2022_LINK"
   echo ""
   echo ""
-   echo -e "\033[31m========================================================\033[0m"
+  echo -e "\033[31m========================================================\033[0m"
 }
 
 convert_to_sslink(){
