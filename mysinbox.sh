@@ -417,7 +417,7 @@ configure_singbox() {
       "type": "tuic",
       "tag": "tuic-in",
       "listen": "::",
-      "listen_port": 8443,
+      "listen_port": 61555,
       "users": [
         {
           "name": "username",
