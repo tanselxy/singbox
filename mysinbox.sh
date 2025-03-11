@@ -421,6 +421,7 @@ configure_singbox() {
   "users": [
     {
       "uuid": "$uuid",
+      "password": "$hysteriaPassword"
     }
   ],
   "congestion_control": "bbr",
