@@ -420,7 +420,7 @@ configure_singbox() {
   "listen_port": 61555,
   "users": [
     {
-      "uuid": "$uuid",
+      "uuid": "$uuid"
     }
   ],
   "congestion_control": "bbr",
