@@ -653,7 +653,8 @@ generate_ss2022_link() {
   ss2022_HOST="$SERVER"
 
   # 生成 V2Ray 链接
-  ss2022_LINK= "$(convert_to_sslink)"
+  convert_to_sslink
+  ss2022_LINK=$(cat /tmp/ss_url.txt)
   echo ""
   echo ""
   echo -e "\033[31m==================ss2022 链接：==========================\033[0m"
@@ -686,7 +687,7 @@ convert_to_sslink(){
   # 构建完整的SS URL
   URL="ss://${USER_INFO_BASE64}@${SERVER}:${PORT}?shadow-tls=${SHADOW_TLS_BASE64}#$(echo -n "$NAME" | sed 's/ /%20/g')"
 
-  echo "$URL"
+  echo "$URL" > /tmp/ss_url.txt
 }
 
 cleanup_port() {
