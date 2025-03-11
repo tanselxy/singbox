@@ -411,7 +411,7 @@ configure_singbox() {
       "listen": "127.0.0.1",
       "network": "tcp",
       "method": "2022-blake3-chacha20-poly1305",
-      "password": $ssPassword
+      "password": "$ssPassword"
     },
     {
   "type": "tuic",
