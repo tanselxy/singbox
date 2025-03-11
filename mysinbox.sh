@@ -420,7 +420,7 @@ configure_singbox() {
   "listen_port": 61555,
   "users": [
     {
-      "uuid": "bef8d126-9e07-4c25-987f-0f483d7e8ff4"
+      "uuid": "$uuid",
     }
   ],
   "congestion_control": "bbr",
@@ -625,7 +625,25 @@ generate_trojan_link() {
   echo "$trojan_LINK"
   echo ""
   echo ""
-  echo -e "\033[31m========================================================\033[0m"
+}
+
+generate_tuic_link() {
+  # 使用之前已经获取的值
+  tuic_UUID=$uuid
+  tuic_IP="$SERVER_IP"
+  tuic_HOST="$SERVER"
+
+  # 生成 V2Ray 链接
+  tuic_LINK="tuic://${tuic_UUID}:@${tuic_IP}:61555?alpn=h3&allow_insecure=1&congestion_control=bbr#tuic"
+  echo ""
+  echo ""
+  echo -e "\033[31m==================tuic 链接：==========================\033[0m"
+  echo ""
+  echo ""
+  echo "$tuic_LINK"
+  echo ""
+  echo ""
+   echo -e "\033[31m========================================================\033[0m"
 }
 
 cleanup_port() {
@@ -664,6 +682,13 @@ generate_qr_code() {
 
   echo "trojan二维码已生成，请扫描以下二维码："
   qrencode -t ANSIUTF8 "$trojan_LINK"
+
+  echo -e "\033[31m============================================\033[0m"
+  echo ""
+  echo ""
+
+  echo "tuic二维码已生成，请扫描以下二维码："
+  qrencode -t ANSIUTF8 "$tuic_LINK"
 
   echo "二维码生成完成！"
 }
@@ -1071,6 +1096,7 @@ main() {
   generate_v2ray_link
   generate_hy2_link
   generate_trojan_link
+  generate_tuic_link
   generate_qr_code
   enable_and_start_service
   enable_bbr
