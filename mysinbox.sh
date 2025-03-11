@@ -669,9 +669,9 @@ convert_to_sslink(){
   SERVER=$SERVER_IP
   PORT=$ssPort
   CIPHER="2022-blake3-chacha20-poly1305"
-  PASSWORD=
+  PASSWORD=$hysteriaPassword
   PLUGIN_HOST=$SERVER
-  PLUGIN_PASSWORD=$hysteriaPassword
+  PLUGIN_PASSWORD="AaaY/lgWSBlSQtDmd0UpFnqR1JJ9JTHn0CLBv12KO5o="
   PLUGIN_VERSION="3"
   NAME="ShadowTLS-v3"
 
