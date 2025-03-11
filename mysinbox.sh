@@ -414,6 +414,14 @@ configure_singbox() {
       "password": "$ssPassword"
     },
     {
+      "type": "shadowsocks",
+      "tag": "ss-ix",
+      "listen": "::",
+      "listen_port": 59000,
+      "method": "aes-128-gcm",
+      "password": "$hysteriaPassword"
+    },
+    {
   "type": "tuic",
   "tag": "tuic-in",
   "listen": "::",
@@ -1044,6 +1052,12 @@ proxies:
     - h3
   reduce-rtt: true
   skip-cert-verify: true # 如果使用自签证书，请改为 true
+- name: "直连接ss除了ix不要尝试"
+  type: ss
+  server: $SERVER_IP
+  port: 59000
+  cipher: aes-128-gcm
+  password: $hysteriaPassword
 proxy-groups:
 - name: PROXY
   type: select
