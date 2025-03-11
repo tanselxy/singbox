@@ -974,7 +974,7 @@ proxies:
   server: $SERVER_IP
   port: $ssPort
   cipher: 2022-blake3-chacha20-poly1305
-  password: $hysteriaPassword
+  password: $ssPassword
   plugin: shadow-tls
   client-fingerprint: chrome
   plugin-opts:
