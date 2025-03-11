@@ -414,21 +414,22 @@ configure_singbox() {
       "password": "Aq2bNFEAtpW8EQcLmU5v43cxyYDHlh6U7qg5NHxS51w="
     },
     {
-      "type": "tuic",
-      "tag": "tuic-in",
-      "listen": "::",
-      "listen_port": 61555,
-      "users": [
-        {
-          "uuid": "$uuid"
-        }
-      ],
-      "congestion_control": "bbr",
-      "tls": {
-        "enabled": true,
-        "server_name": "bing.com",
-        "certificate_path": "/etc/sing-box/cert/cert.pem",
-        "key_path": "/etc/sing-box/cert/private.key"
+  "type": "tuic",
+  "tag": "tuic-in",
+  "listen": "::",
+  "listen_port": 61555,
+  "users": [
+    {
+      "uuid": "bef8d126-9e07-4c25-987f-0f483d7e8ff4"
+    }
+  ],
+  "congestion_control": "bbr",
+  "tls": {
+    "enabled": true,
+    "server_name": "bing.com",
+    "alpn": ["h3"],
+    "certificate_path": "/etc/sing-box/cert/cert.pem",
+    "key_path": "/etc/sing-box/cert/private.key"
       }
     },
     {
