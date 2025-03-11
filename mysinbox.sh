@@ -966,6 +966,19 @@ proxies:
     path: /trojan
     headers:
       Host: bing.com
+- name: Tuic
+  type: tuic
+  server: 84.54.3.161
+  port: 61555
+  uuid: $uuid
+  password: $hysteriaPassword
+  congestion-controller: bbr
+  udp: true
+  sni: bing.com
+  alpn:
+    - h3
+  reduce-rtt: true
+  skip-cert-verify: true # 如果使用自签证书，请改为 true
 proxy-groups:
 - name: PROXY
   type: select
@@ -973,6 +986,7 @@ proxy-groups:
     - reality
     - Hysteria2
     - Trojan
+    - Tuic
 rule-providers:
   reject:
     type: http
