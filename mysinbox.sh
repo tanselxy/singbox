@@ -667,9 +667,18 @@ generate_ss2022_link() {
 }
 
 generate_base64() {
-    # 随机生成一串字节数据，并用 base64 编码
-    local length=${1:-32}  # 默认生成 32 字节的随机数据
-    head -c "$length" /dev/urandom | base64 | tr -d '\n'
+  local length="$1"
+  
+  # 默认长度为 32 字节 (会生成约 44 字符的 Base64 字符串)
+  if [ -z "$length" ]; then
+    length=32
+  fi
+  
+  # 方法 1: 使用 /dev/urandom 和 base64
+  openssl rand -base64 "$length"
+  
+  # 方法 2: 如果没有 openssl，可以使用这个替代方案
+  # head -c "$length" /dev/urandom | base64
 }
 
 convert_to_sslink(){
