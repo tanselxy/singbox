@@ -643,7 +643,50 @@ generate_tuic_link() {
   echo "$tuic_LINK"
   echo ""
   echo ""
+ 
+}
+
+generate_ss2022_link() {
+  # 使用之前已经获取的值
+  ss2022_UUID=$uuid
+  ss2022_IP="$SERVER_IP"
+  ss2022_HOST="$SERVER"
+
+  # 生成 V2Ray 链接
+  ss2022_LINK= $(convert_to_sslink)
+  echo ""
+  echo ""
+  echo -e "\033[31m==================ss2022 链接：==========================\033[0m"
+  echo ""
+  echo ""
+  echo "$ss2022_LINK"
+  echo ""
+  echo ""
    echo -e "\033[31m========================================================\033[0m"
+}
+
+convert_to_sslink(){
+  SERVER=$SERVER_IP
+  PORT=$ssPort
+  CIPHER="2022-blake3-chacha20-poly1305"
+  PASSWORD=
+  PLUGIN_HOST=$SERVER
+  PLUGIN_PASSWORD=$hysteriaPassword
+  PLUGIN_VERSION="3"
+  NAME="ShadowTLS-v3"
+
+  # 创建用户信息部分并Base64编码
+  USER_INFO="${CIPHER}:${PASSWORD}"
+  USER_INFO_BASE64=$(echo -n "$USER_INFO" | base64)
+
+  # 创建shadow-tls JSON并Base64编码
+  SHADOW_TLS_JSON="{\"address\":\"$SERVER\",\"password\":\"$PLUGIN_PASSWORD\",\"version\":\"$PLUGIN_VERSION\",\"host\":\"$PLUGIN_HOST\",\"port\":\"$PORT\"}"
+  SHADOW_TLS_BASE64=$(echo -n "$SHADOW_TLS_JSON" | base64)
+
+  # 构建完整的SS URL
+  URL="ss://${USER_INFO_BASE64}@${SERVER}:${PORT}?shadow-tls=${SHADOW_TLS_BASE64}#$(echo -n "$NAME" | sed 's/ /%20/g')"
+
+  echo "$URL"
 }
 
 cleanup_port() {
@@ -689,6 +732,13 @@ generate_qr_code() {
 
   echo "tuic二维码已生成，请扫描以下二维码："
   qrencode -t ANSIUTF8 "$tuic_LINK"
+
+  echo -e "\033[31m============================================\033[0m"
+  echo ""
+  echo ""
+
+  echo "ss2022二维码已生成，请扫描以下二维码："
+  qrencode -t ANSIUTF8 "$ss2022_LINK"
 
   echo "二维码生成完成！"
 }
