@@ -411,7 +411,7 @@ configure_singbox() {
       "listen": "127.0.0.1",
       "network": "tcp",
       "method": "2022-blake3-chacha20-poly1305",
-      "password": $hysteriaPassword
+      "password": $ssPassword
     },
     {
   "type": "tuic",
@@ -666,12 +666,18 @@ generate_ss2022_link() {
   echo -e "\033[31m========================================================\033[0m"
 }
 
+generate_base64() {
+    # 随机生成一串字节数据，并用 base64 编码
+    local length=${1:-32}  # 默认生成 32 字节的随机数据
+    head -c "$length" /dev/urandom | base64 | tr -d '\n'
+}
+
 convert_to_sslink(){
   SERVER=$SERVER_IP
   PORT=$ssPort
   CIPHER="2022-blake3-chacha20-poly1305"
-  PASSWORD=$hysteriaPassword
-  PLUGIN_HOST=$SERVER
+  PASSWORD=$ssPassword
+  PLUGIN_HOST=$ss2022_HOST
   PLUGIN_PASSWORD="AaaY/lgWSBlSQtDmd0UpFnqR1JJ9JTHn0CLBv12KO5o="
   PLUGIN_VERSION="3"
   NAME="ShadowTLS-v3"
@@ -1148,6 +1154,7 @@ main() {
   ssPort=$(get_available_port 31000 40000)
   hysteriaPort=$(get_available_port 50000 60000)
   hysteriaPassword=$(generate_strong_password)
+  ssPassword=$(generate_base64 32)
 
  
 
