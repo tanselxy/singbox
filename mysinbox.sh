@@ -421,7 +421,6 @@ configure_singbox() {
   "users": [
     {
       "uuid": "$uuid",
-      "password": "$hysteriaPassword"
     }
   ],
   "congestion_control": "bbr",
@@ -971,7 +970,7 @@ proxies:
   server: 84.54.3.161
   port: 61555
   uuid: $uuid
-  password: $hysteriaPassword
+  #password: $hysteriaPassword
   congestion-controller: bbr
   udp: true
   sni: bing.com
