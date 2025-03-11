@@ -1161,6 +1161,7 @@ main() {
   generate_hy2_link
   generate_trojan_link
   generate_tuic_link
+  generate_ss2022_link
   generate_qr_code
   enable_and_start_service
   enable_bbr
