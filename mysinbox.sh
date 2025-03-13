@@ -681,7 +681,7 @@ generate_ss_link() {
   ss_password="$hysteriaPassword"
   ss_encoded=$(echo -n "aes-128-gcm:${ss_password}" | base64)
  
-  ss_LINK="ss://${ss_encoded}@${ss_IP}:59000#专线ss"
+  ss_LINK= "ss://${ss_encoded}@${ss_IP}:59000#专线ss"
   echo ""
   echo ""
   echo -e "\033[31m==================ss 链接：==========================\033[0m"
@@ -1199,9 +1199,9 @@ EOF
 
 # 主函数
 main() {
-  vlessPort=$(get_available_port 20000 30000)
-  ssPort=$(get_available_port 31000 40000)
-  hysteriaPort=$(get_available_port 50000 60000)
+  vlessPort=$(get_available_port 20000 20010)
+  ssPort=$(get_available_port 31000 31010)
+  hysteriaPort=$(get_available_port 50000 50010)
   hysteriaPassword=$(generate_strong_password)
   ssPassword=$(generate_base64 32)
 
