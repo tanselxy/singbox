@@ -681,7 +681,7 @@ generate_ss_link() {
   ss_password="$hysteriaPassword"
   ss_encoded=$(echo -n "aes-128-gcm:${ss_password}" | base64)
  
-  ss_LINK= "ss://${ss_encoded}@${ss_IP}:59000#专线ss"
+  ss_LINK="ss://${ss_encoded}@${ss_IP}:59000#专线ss"
   echo ""
   echo ""
   echo -e "\033[31m==================ss 链接：==========================\033[0m"
