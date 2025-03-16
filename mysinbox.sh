@@ -1067,7 +1067,7 @@ proxies:
       Host: bing.com
 - name: Tuic
   type: tuic
-  server: 84.54.3.161
+  server: $SERVER_IP
   port: 61555
   uuid: $uuid
   #password: $hysteriaPassword
