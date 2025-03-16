@@ -267,7 +267,7 @@ checkDomin() {
         SERVER="www.thewaltdisneycompany.com"
         ;;
       NL)
-        SERVER="www.technologieradar.nl"
+        SERVER="nl.servutech.com"
         ;;
       DE)
         SERVER="www.mediamarkt.de"
