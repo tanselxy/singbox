@@ -381,14 +381,15 @@ configure_singbox() {
     "rules": [
       {
         "rule_set": ["cn"],
-        "server": ["local", "local-temp"]
+        "server": "local"
       },
       {
         "rule_set": ["category-ads-all"],
         "server": "block",
         "disable_cache": true
       }
-    ]
+    ],
+    "final": "local-temp"
   },
   "inbounds": [
     {
