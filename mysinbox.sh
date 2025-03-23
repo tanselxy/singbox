@@ -592,7 +592,7 @@ generate_v2ray_link() {
   V2RAY_PORT="$vlessPort"
 
   # 生成 V2Ray 链接
-  V2RAY_LINK="vless://${V2RAY_UUID}@${V2RAY_IP}:${V2RAY_PORT}?security=reality&flow=xtls-rprx-vision&type=tcp&sni=${V2RAY_HOST}&fp=chrome&pbk=${V2RAY_PBK}&sid=${V2RAY_SID}&encryption=none&headerType=none#reality"
+  V2RAY_LINK="vless://${V2RAY_UUID}@[${V2RAY_IP}]:${V2RAY_PORT}?security=reality&flow=xtls-rprx-vision&type=tcp&sni=${V2RAY_HOST}&fp=chrome&pbk=${V2RAY_PBK}&sid=${V2RAY_SID}&encryption=none&headerType=none#reality"
   echo ""
   echo ""
   echo -e "\033[31m==================V2Ray 链接：==========================\033[0m"
