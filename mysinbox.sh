@@ -355,7 +355,7 @@ configure_singbox() {
 
   # 生成完整 config.json 文件
   cat > $CONFIG_PATH <<EOF
-{
+  {
   "log": {
     "disabled": false,
     "level": "info",
@@ -365,7 +365,12 @@ configure_singbox() {
     "servers": [
       {
         "tag": "local",
-        "address": "https://dns.google/dns-query",
+        "address": "https://1.1.1.1/dns-query",
+        "detour": "direct"
+      },
+      {
+        "tag": "local-temp",
+        "address": "2001:4860:4860::8888",
         "detour": "direct"
       },
       {
@@ -376,7 +381,7 @@ configure_singbox() {
     "rules": [
       {
         "rule_set": ["cn"],
-        "server": "local"
+        "server": ["local", "local-temp"]
       },
       {
         "rule_set": ["category-ads-all"],
