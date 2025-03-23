@@ -611,7 +611,7 @@ generate_hy2_link() {
   hy_IP="$SERVER_IP"
 
   # 生成 by 链接
-  hy_LINK="hysteria2://${hy_password}@${hy_IP}:${hy_PORT}?insecure=1&alpn=h3&sni=${hy_domain}#Hysteria2"
+  hy_LINK="hysteria2://${hy_password}@[${hy_IP}]:${hy_PORT}?insecure=1&alpn=h3&sni=${hy_domain}#Hysteria2"
   echo ""
   echo ""
   echo -e "\033[31m==================hy2 链接：==========================\033[0m"
@@ -630,7 +630,7 @@ generate_trojan_link() {
   trojan_IP="$SERVER_IP"
 
   # 生成 by 链接
-  trojan_LINK="trojan://${trojan_password}@${trojan_IP}:${trojan_PORT}?sni=bing.com&type=ws&path=%2Ftrojan&host=bing.com&allowInsecure=1&udp=true&alpn=http%2F1.1"
+  trojan_LINK="trojan://${trojan_password}@[${trojan_IP}]:${trojan_PORT}?sni=bing.com&type=ws&path=%2Ftrojan&host=bing.com&allowInsecure=1&udp=true&alpn=http%2F1.1"
   echo ""
   echo ""
   echo -e "\033[31m==================trojan 链接：==========================\033[0m"
@@ -648,7 +648,7 @@ generate_tuic_link() {
   tuic_HOST="$SERVER"
 
   # 生成 V2Ray 链接
-  tuic_LINK="tuic://${tuic_UUID}:@${tuic_IP}:61555?alpn=h3&allow_insecure=1&congestion_control=bbr#tuic"
+  tuic_LINK="tuic://${tuic_UUID}:@[${tuic_IP}]:61555?alpn=h3&allow_insecure=1&congestion_control=bbr#tuic"
   echo ""
   echo ""
   echo -e "\033[31m==================tuic 链接：==========================\033[0m"
@@ -687,7 +687,7 @@ generate_ss_link() {
   ss_password="$hysteriaPassword"
   ss_encoded=$(echo -n "aes-128-gcm:${ss_password}" | base64)
  
-  ss_LINK="ss://${ss_encoded}@${ss_IP}:59000#专线ss"
+  ss_LINK="ss://${ss_encoded}@[${ss_IP}]:59000#专线ss"
   echo ""
   echo ""
   echo -e "\033[31m==================ss 链接：==========================\033[0m"
@@ -733,7 +733,7 @@ convert_to_sslink(){
   SHADOW_TLS_BASE64=$(echo -n "$SHADOW_TLS_JSON" | base64)
 
   # 构建完整的SS URL
-  URL="ss://${USER_INFO_BASE64}@${SERVER}:${PORT}?shadow-tls=${SHADOW_TLS_BASE64}#$(echo -n "$NAME" | sed 's/ /%20/g')"
+  URL="ss://${USER_INFO_BASE64}@[${SERVER}]:${PORT}?shadow-tls=${SHADOW_TLS_BASE64}#$(echo -n "$NAME" | sed 's/ /%20/g')"
 
   echo "$URL" > /tmp/ss_url.txt
 }
