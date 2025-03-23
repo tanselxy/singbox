@@ -365,7 +365,7 @@ configure_singbox() {
     "servers": [
       {
         "tag": "local",
-        "address": "https://1.1.1.1/dns-query",
+        "address": "https://dns.google/dns-query",
         "detour": "direct"
       },
       {
