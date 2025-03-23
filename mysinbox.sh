@@ -804,6 +804,7 @@ generate_client_config() {
   if [[ -z "$SERVER_IP" ]]; then
       echo "无法获取 IPv4 地址，尝试获取 IPv6 地址..."
       SERVER_IP=$(curl -6 -s ifconfig.me || curl -6 -s ipinfo.io/ip || curl -6 -s api64.ipify.org)
+      echo "ipv6地址为... $SERVER_IP"
       if [[ -z "$SERVER_IP" ]]; then
           echo "无法获取服务器的公网 IPv6 地址，请检查网络连接。"
           exit 1
