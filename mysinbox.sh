@@ -295,7 +295,7 @@ checkDomin() {
 
 # 提供下载链接
 provide_download_link() {
-  SERVER_IP=$(curl -4 -s ifconfig.me)
+  echo "输出ipv6 $SERVER_IP"
   echo "文件已生成并可通过以下链接下载："
   # 修改下载链接显示
   echo -e "\033[31m==================Sinbox链接：==========================\033[0m"
