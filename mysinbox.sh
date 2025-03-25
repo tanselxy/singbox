@@ -53,7 +53,7 @@ generate_strong_password() {
 }
 
 checkisIpv6(){
-  InstallWarp
+  #InstallWarp
   SERVER_IP=$(curl -4 -s ifconfig.me || curl -4 -s ipinfo.io/ip)
   if [[ -z "$SERVER_IP" ]]; then
       echo "无法获取 IPv4 地址，尝试获取 IPv6 地址..."
@@ -698,6 +698,25 @@ enable_and_start_service() {
 
 
 
+generate_vlessIpv6_link() {
+  # 使用之前已经获取的值
+  ipv6_UUID=$uuid
+  ipv6_domain=$domainName
+  ipv6_PORT="443"
+
+  # 生成 V2Ray 链接
+  #V2RAY_LINK="vless://${V2RAY_UUID}@[${V2RAY_IP}]:${V2RAY_PORT}?security=reality&flow=xtls-rprx-vision&type=tcp&sni=${V2RAY_HOST}&fp=chrome&pbk=${V2RAY_PBK}&sid=${V2RAY_SID}&encryption=none&headerType=none#reality"
+  ipv6_LINK="vless://${ipv6_UUID}@${ipv6_domain}:${ipv6_PORT}?encryption=none&security=tls&type=ws&sni=${ipv6_domain}&path=%2Fvless#ipv6直连"
+  echo ""
+  echo ""
+  echo -e "\033[31m==================ipv6只用这个链接：==========================\033[0m"
+  echo ""
+  echo ""
+  echo "$ipv6_LINK"
+  echo ""
+  echo ""
+}
+
 generate_v2ray_link() {
   # 使用之前已经获取的值
   V2RAY_UUID=$uuid
@@ -912,9 +931,15 @@ generate_qr_code() {
   echo "ss专线二维码已生成，请扫描以下二维码："
   qrencode -t ANSIUTF8 "$ss_LINK"
 
-  echo "二维码生成完成！"
-}
+  echo -e "\033[31m============================================\033[0m"
+  echo ""
+  echo ""
 
+  echo "IPV6服务器二维码已生成，请扫描以下二维码："
+  qrencode -t ANSIUTF8 "$ipv6_LINK"
+
+  
+}
 
 
 # 生成客户端配置文件 singbox.yaml
@@ -1357,6 +1382,7 @@ main() {
   generate_tuic_link
   generate_ss2022_link
   generate_ss_link
+  generate_vlessIpv6_link
   generate_qr_code
   enable_and_start_service
   enable_bbr
