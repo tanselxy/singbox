@@ -23,6 +23,9 @@ RANDOM_STR=$(cat /dev/urandom | tr -dc 'a-zA-Z' | fold -w 6 | head -n 1)
 isIpv6=false
 #ipv6的域名
 domainName="";
+#域名的证书
+certFile="/etc/ssl/cert/certCDN.pem"
+keyFile="/etc/ssl/cert/privateCDN.key"
 
 get_available_port() {
     local start_range=$1  # 起始端口范围
@@ -69,7 +72,7 @@ checkisIpv6(){
 InstallWarp() {
     # 让用户必须输入解析在cf的域名
   while true; do
-    read -p "IPv6 必须拥有域名，请输入您已解析在 Cloudflare 的域名: " domainName
+    read -p "IPv6 必须拥有域名和证书，请先输入您已解析在 Cloudflare 的域名: " domainName
     # 使用正则匹配域名格式（简单验证）
     if [[ "$domainName" =~ ^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]]; then
      
@@ -91,9 +94,19 @@ InstallWarp() {
 
   # 比较两个 IPv6 是否一致
   if [[ "$localIPv6" == "$domainIPv6" ]]; then
-      echo "域名解析地址与本机 IPv6 一致。继续执行..."
+      echo "✅ 域名解析地址与本机 IPv6 一致。继续执行..."
   else
       echo "域名解析地址与本机 IPv6 不一致，不要开启小云朵，请再次检查 Cloudflare 解析是否正确。"
+      exit 1
+  fi
+
+  if [[ -f "$certFile" && -f "$keyFile" ]]; then
+    echo "✅ 证书文件和私钥文件已存在，继续配置……"
+  else
+      echo "❌ 缺少证书文件或私钥文件，请确认以下路径下文件是否存在："
+      mkdir -p /etc/ssl/cert/
+      [[ ! -f "$certFile" ]] && echo "  - 缺少证书文件: $certFile"
+      [[ ! -f "$keyFile" ]] && echo "  - 缺少私钥文件: $keyFile"
       exit 1
   fi
 
@@ -572,8 +585,8 @@ configure_singbox() {
       "tls": {
         "enabled": true,
         "server_name": "$domainName",
-        "certificate_path": "/etc/sing-box/cert/cert.pem",
-        "key_path": "/etc/sing-box/cert/private.key"
+        "certificate_path": "/etc/ssl/cert/certCDN.pem",
+        "key_path": "/etc/ssl/cert/privateCDN.key"
       }
     },
     {
