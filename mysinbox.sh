@@ -53,8 +53,8 @@ install_singbox() {
   sudo apt update && sudo apt upgrade -y
   echo "修改系统时区为上海..."
   sudo timedatectl set-timezone Asia/Shanghai
-  echo "正在安装 Sing-Box..."
-  bash <(curl -fsSL https://sing-box.app/deb-install.sh)
+  echo "正在安装 Sing-Box..." && curl -fsSL https://sing-box.app/deb-install.sh | bash
+
   
   install_self_signed_cert
 }
