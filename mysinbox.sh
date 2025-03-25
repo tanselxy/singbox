@@ -19,6 +19,8 @@ hysteriaPassword=xyz0123456789!A
 uuid=0
 #文件名
 RANDOM_STR=$(cat /dev/urandom | tr -dc 'a-zA-Z' | fold -w 6 | head -n 1)
+#是否为ipv6
+isIpv6=false
 
 get_available_port() {
     local start_range=$1  # 起始端口范围
@@ -43,6 +45,42 @@ generate_strong_password() {
   password=$(head -c $password_length /dev/urandom | base64 | tr -dc "$char_set" | head -c $password_length)
 
   echo "$password"
+}
+
+checkisIpv6(){
+  SERVER_IP=$(curl -4 -s ifconfig.me || curl -4 -s ipinfo.io/ip)
+  if [[ -z "$SERVER_IP" ]]; then
+      echo "无法获取 IPv4 地址，尝试获取 IPv6 地址..."
+      SERVER_IP=$(curl -6 -s ifconfig.me || curl -6 -s ipinfo.io/ip || curl -6 -s api64.ipify.org)
+      isIpv6=true
+      InstallWarp
+      if [[ -z "$SERVER_IP" ]]; then
+          echo "无法获取服务器的公网 IPv6 地址，请检查网络连接。"
+          exit 1
+          #echo "无法获取服务器的公网 IP 地址，请检查网络连接。"
+          #exit 1
+      fi
+  fi
+}
+InstallWarp() {
+  curl -H 'Cache-Control: no-cache' -o wgcf https://raw.githubusercontent.com/tanselxy/singbox/main/wgcf_2.2.15_linux_amd64
+  mv wgcf /usr/local/bin/wgcf
+  chmod +x /usr/local/bin/wgcf
+  wgcf register
+  wgcf generate
+  sed -i 's/^\(DNS *=.*\)/# \1/' wgcf-profile.conf
+  sed -i 's/^\(AllowedIPs *= ::\/0\)/# \1/' wgcf-profile.conf
+  cat > /etc/apt/sources.list <<EOF
+deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+EOF
+  apt update
+  apt install wireguard -y
+  cp wgcf-profile.conf /etc/wireguard/wgcf.conf
+  wg-quick up wgcf
+  ip=$(curl --interface wgcf https://api.ipify.org)
+  echo "当前warp出来的Ipv4为：$ip"
 }
 
 
@@ -804,18 +842,18 @@ generate_qr_code() {
 generate_client_config() {
   CONFIG_PATH="/root/singbox_${RANDOM_STR}.yaml"
 
-    # 获取当前机器的公网 IP
-  SERVER_IP=$(curl -4 -s ifconfig.me || curl -4 -s ipinfo.io/ip)
-  if [[ -z "$SERVER_IP" ]]; then
-      echo "无法获取 IPv4 地址，尝试获取 IPv6 地址..."
-      SERVER_IP=$(curl -6 -s ifconfig.me || curl -6 -s ipinfo.io/ip || curl -6 -s api64.ipify.org)
-      if [[ -z "$SERVER_IP" ]]; then
-          echo "无法获取服务器的公网 IPv6 地址，请检查网络连接。"
-          exit 1
-          #echo "无法获取服务器的公网 IP 地址，请检查网络连接。"
-          #exit 1
-      fi
-  fi
+  #   # 获取当前机器的公网 IP
+  # SERVER_IP=$(curl -4 -s ifconfig.me || curl -4 -s ipinfo.io/ip)
+  # if [[ -z "$SERVER_IP" ]]; then
+  #     echo "无法获取 IPv4 地址，尝试获取 IPv6 地址..."
+  #     SERVER_IP=$(curl -6 -s ifconfig.me || curl -6 -s ipinfo.io/ip || curl -6 -s api64.ipify.org)
+  #     if [[ -z "$SERVER_IP" ]]; then
+  #         echo "无法获取服务器的公网 IPv6 地址，请检查网络连接。"
+  #         exit 1
+  #         #echo "无法获取服务器的公网 IP 地址，请检查网络连接。"
+  #         #exit 1
+  #     fi
+  # fi
 
   # 使用之前输入的 SERVER 值
   HOST="$SERVER"
@@ -1212,7 +1250,7 @@ main() {
   ssPassword=$(generate_base64 32)
 
  
-
+  checkisIpv6
   excute_fail2ban
   install_singbox
   configure_singbox
