@@ -21,6 +21,8 @@ uuid=0
 RANDOM_STR=$(cat /dev/urandom | tr -dc 'a-zA-Z' | fold -w 6 | head -n 1)
 #是否为ipv6
 isIpv6=false
+#ipv6的域名
+domainName="";
 
 get_available_port() {
     local start_range=$1  # 起始端口范围
@@ -48,21 +50,55 @@ generate_strong_password() {
 }
 
 checkisIpv6(){
+  InstallWarp
   SERVER_IP=$(curl -4 -s ifconfig.me || curl -4 -s ipinfo.io/ip)
   if [[ -z "$SERVER_IP" ]]; then
       echo "无法获取 IPv4 地址，尝试获取 IPv6 地址..."
       SERVER_IP=$(curl -6 -s ifconfig.me || curl -6 -s ipinfo.io/ip || curl -6 -s api64.ipify.org)
       isIpv6=true
-      InstallWarp
       if [[ -z "$SERVER_IP" ]]; then
           echo "无法获取服务器的公网 IPv6 地址，请检查网络连接。"
           exit 1
           #echo "无法获取服务器的公网 IP 地址，请检查网络连接。"
           #exit 1
       fi
+      echo "开始在执行warp获取一个ipv4..."
+      InstallWarp
   fi
 }
 InstallWarp() {
+    # 让用户必须输入解析在cf的域名
+  while true; do
+    read -p "IPv6 必须拥有域名，请输入您已解析在 Cloudflare 的域名: " domainName
+    # 使用正则匹配域名格式（简单验证）
+    if [[ "$domainName" =~ ^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]]; then
+     
+      break
+    else
+      echo "输入的不是有效的域名格式，请重新输入。"
+    fi
+  done
+
+# 获取本机的主 IPv6 地址
+  localIPv6=$SERVER_IP
+
+  # 获取域名解析出来的 IPv6 地址（AAAA 记录）
+  domainIPv6=$(dig AAAA "$domainName" +short | head -n1)
+
+  # 显示对比信息（可选）
+  echo "🖥️ 本机 IPv6 地址: $localIPv6"
+  echo "🌐 域名解析 IPv6: $domainIPv6"
+
+  # 比较两个 IPv6 是否一致
+  if [[ "$localIPv6" == "$domainIPv6" ]]; then
+      echo "域名解析地址与本机 IPv6 一致。继续执行..."
+  else
+      echo "域名解析地址与本机 IPv6 不一致，不要开启小云朵，请再次检查 Cloudflare 解析是否正确。"
+      exit 1
+  fi
+
+
+
   curl -H 'Cache-Control: no-cache' -o wgcf https://raw.githubusercontent.com/tanselxy/singbox/main/wgcf_2.2.15_linux_amd64
   mv wgcf /usr/local/bin/wgcf
   chmod +x /usr/local/bin/wgcf
@@ -298,6 +334,15 @@ checkDomin() {
     echo "当前 IP 地址所在国家代码: $COUNTRY_CODE"
 
     case $COUNTRY_CODE in
+      TW)
+        SERVER="ntu.edu.tw"
+        ;;
+      NG)
+        SERVER="unn.edu.ng"
+        ;;
+      SG)
+        SERVER="nus.edu.sg"
+        ;;
       JP)
         SERVER="www.tms-e.co.jp"
         ;;
@@ -465,22 +510,22 @@ configure_singbox() {
       "password": "$hysteriaPassword"
     },
     {
-  "type": "tuic",
-  "tag": "tuic-in",
-  "listen": "::",
-  "listen_port": 61555,
-  "users": [
-    {
-      "uuid": "$uuid"
-    }
-  ],
-  "congestion_control": "bbr",
-  "tls": {
-    "enabled": true,
-    "server_name": "bing.com",
-    "alpn": ["h3"],
-    "certificate_path": "/etc/sing-box/cert/cert.pem",
-    "key_path": "/etc/sing-box/cert/private.key"
+      "type": "tuic",
+      "tag": "tuic-in",
+      "listen": "::",
+      "listen_port": 61555,
+      "users": [
+        {
+          "uuid": "$uuid"
+        }
+      ],
+      "congestion_control": "bbr",
+      "tls": {
+        "enabled": true,
+        "server_name": "bing.com",
+        "alpn": ["h3"],
+        "certificate_path": "/etc/sing-box/cert/cert.pem",
+        "key_path": "/etc/sing-box/cert/private.key"
       }
     },
     {
@@ -508,6 +553,27 @@ configure_singbox() {
             "0123456789abcded"
           ]
         }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "vless-cdn",
+      "listen": "::",
+      "listen_port": 443,
+      "users": [
+        {
+          "uuid": "$uuid"
+        }
+      ],
+      "transport": {
+        "type": "ws",
+        "path": "/vless"
+      },
+      "tls": {
+        "enabled": true,
+        "server_name": "$domainName",
+        "certificate_path": "/etc/sing-box/cert/cert.pem",
+        "key_path": "/etc/sing-box/cert/private.key"
       }
     },
     {
@@ -1127,6 +1193,19 @@ proxies:
   port: 59000
   cipher: aes-128-gcm
   password: $hysteriaPassword
+- name: "ipv6cdn"
+  type: vless
+  server: $domainName
+  port: 443
+  uuid: $uuid
+  network: ws
+  tls: true
+  udp: true
+  client-fingerprint: chrome
+  ws-opts:
+    path: /vless
+    headers:
+      Host: $domainName
 proxy-groups:
 - name: PROXY
   type: select
@@ -1136,6 +1215,7 @@ proxy-groups:
     - Trojan
     - Tuic
     - ShadowTLS-v3
+    - ipv6cdn
 rule-providers:
   reject:
     type: http
