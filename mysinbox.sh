@@ -59,12 +59,9 @@ install_singbox() {
   install_self_signed_cert
 }
 
-# 安装 warp
+# 配置warp
 install_warp() {
-  #检查dns解析服务是否启动
-  check_and_start_systemd_resolved
-  echo "正在安装 warp，端口一定要选默认40000，选13"
-  bash <(curl -fsSL https://gitlab.com/fscarmen/warp_unlock/-/raw/main/unlock.sh)
+    
 }
 
 #安装自签证书
@@ -295,7 +292,6 @@ checkDomin() {
 
 # 提供下载链接
 provide_download_link() {
-  echo "输出ipv6 $SERVER_IP"
   echo "文件已生成并可通过以下链接下载："
   # 修改下载链接显示
   echo -e "\033[31m==================Sinbox链接：==========================\033[0m"
@@ -810,7 +806,6 @@ generate_client_config() {
   if [[ -z "$SERVER_IP" ]]; then
       echo "无法获取 IPv4 地址，尝试获取 IPv6 地址..."
       SERVER_IP=$(curl -6 -s ifconfig.me || curl -6 -s ipinfo.io/ip || curl -6 -s api64.ipify.org)
-      echo "ipv6地址为... $SERVER_IP"
       if [[ -z "$SERVER_IP" ]]; then
           echo "无法获取服务器的公网 IPv6 地址，请检查网络连接。"
           exit 1
@@ -1085,7 +1080,7 @@ proxies:
     - h3
   reduce-rtt: true
   skip-cert-verify: true # 如果使用自签证书，请改为 true
-- name: "直连接ss除了ix不要尝试"
+- name: "除了ix和专线不要使用此协议"
   type: ss
   server: $SERVER_IP
   port: 59000
@@ -1099,6 +1094,7 @@ proxy-groups:
     - Hysteria2
     - Trojan
     - Tuic
+    - ShadowTLS-v3
 rule-providers:
   reject:
     type: http
