@@ -59,9 +59,12 @@ install_singbox() {
   install_self_signed_cert
 }
 
-# 配置warp
+# 安装 warp
 install_warp() {
-    
+  #检查dns解析服务是否启动
+  check_and_start_systemd_resolved
+  echo "正在安装 warp，端口一定要选默认40000，选13"
+  bash <(curl -fsSL https://gitlab.com/fscarmen/warp_unlock/-/raw/main/unlock.sh)
 }
 
 #安装自签证书
