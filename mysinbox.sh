@@ -80,7 +80,7 @@ InstallWarp() {
   done
 
 # 获取本机的主 IPv6 地址
-  localIPv6=$SERVER_IP
+  localIPv6=$(curl -6 -s ifconfig.me || curl -6 -s ipinfo.io/ip || curl -6 -s api64.ipify.org)
 
   # 获取域名解析出来的 IPv6 地址（AAAA 记录）
   domainIPv6=$(dig AAAA "$domainName" +short | head -n1)
