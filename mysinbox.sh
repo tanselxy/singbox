@@ -237,9 +237,9 @@ start_fail2ban() {
 change_ssh_port() {
 
   # 提示用户是否安装 fail2ban
-  read -p "是否修改端口? (y/n) [n]: " INSTALL_FAIL2BAN
-  INSTALL_FAIL2BAN=${INSTALL_FAIL2BAN:-n}  # 默认选择是不修改端口
-  if [[ "$INSTALL_FAIL2BAN" =~ ^[Yy]$ ]]; then
+  read -p "${YELLOW}是否修改端口（nat机器别修改）${NC}? (y/${RED}n${NC}) [n]: " ModifyPort
+  ModifyPort=${ModifyPort:-n}  # 默认选择是不修改端口
+  if [[ "$ModifyPort" =~ ^[Yy]$ ]]; then
     echo "正在修改 SSH 端口..."
     
     # 先安装 SSH 服务器
@@ -1416,7 +1416,8 @@ main() {
   hysteriaPassword=$(generate_strong_password)
   ssPassword=$(generate_base64 32)
 
- 
+  #修改ssh端口为40001
+  change_ssh_port
   checkisIpv6
   excute_fail2ban
   install_singbox
@@ -1439,8 +1440,7 @@ main() {
   optimize_network
   # 启动清除任务a
   cleanup_task &
-  #修改ssh端口为40001
-  change_ssh_port
+
   #serve_download
   echo -e "${YELLOW}所有配置完成，10分钟后清除所有对外配置文件！${NC}"
 }
