@@ -59,20 +59,21 @@ checkisIpv6(){
 
   echo "🌐 当前出口 IP 所属组织：$SERVER_IP"
 
-  # 判断是否是 Cloudflare
-  if [[ -n "$SERVER_IP" ]] && echo "$SERVER_IP" | grep -qi "Cloudflare"; then
+  if [[ -n "$SERVER_IP" ]]; then
+    if echo "$SERVER_IP" | grep -qi "Cloudflare"; then
       while true; do
-        read -p "请输入cloudflare上的域名: " domainName
-        # 使用正则匹配域名格式（简单验证）
+        read -p "请输入 cloudflare 上的域名: " domainName
         if [[ "$domainName" =~ ^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]]; then
-        
           break
         else
-          echo "输入的不是有效的域名格式，请重新输入。"
+          echo "❌ 输入的不是有效的域名格式，请重新输入。"
         fi
       done
-  else
+    else
       :
+    fi
+  else
+    echo "⚠️ SERVER_IP 为空，跳过 Cloudflare 检测"
   fi
 
    
