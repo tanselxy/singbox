@@ -57,7 +57,7 @@ checkisIpv6(){
   SERVER_IP=$(curl -4 -s ifconfig.me || curl -4 -s ipinfo.io/ip)
 
   org=$(curl -s https://ipinfo.io/org)
-  echo "🌐 当前出口 IP 所属组织：$org"
+  echo "🌐 当前出口 IP 所属组织x：$org"
 
   if [[ -n "$org" ]]; then
     if echo "$org" | grep -qi "Cloudflare"; then
