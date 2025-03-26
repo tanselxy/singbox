@@ -745,10 +745,10 @@ generate_vlessIpv6_link() {
   isUse=$(curl -s "$url")
 
   if echo "$isUse" | grep -q '"evil_type":0'; then
-    echo "域名正常使用"
+    echo "域名正常使用wx"
     ipv6_OptimazationDomain=$domainName
   else
-    echo "域名非正常使用"
+    echo "域名非正常使用wx"
     ipv6_OptimazationDomain="csgo.com"
   fi
 
