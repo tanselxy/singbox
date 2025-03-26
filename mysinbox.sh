@@ -236,8 +236,9 @@ start_fail2ban() {
 
 change_ssh_port() {
 
-  # 提示用户是否安装 fail2ban
-  read -p "${YELLOW}是否修改端口（nat机器别修改）${NC}? (y/${RED}n${NC}) [n]: " ModifyPort
+  
+  echo -e "${YELLOW}是否修改端口（nat机器别修改）${NC}? (y/${RED}n${NC}) [n]: "
+  read ModifyPort
   ModifyPort=${ModifyPort:-n}  # 默认选择是不修改端口
   if [[ "$ModifyPort" =~ ^[Yy]$ ]]; then
     echo "正在修改 SSH 端口..."
@@ -270,7 +271,7 @@ change_ssh_port() {
     if command -v ufw >/dev/null 2>&1; then
         ufw allow $NEW_SSH_PORT/tcp
     fi
-    echo "${YELLOW}请使用端口40001进行 SSH 登陆${NC}"
+    echo -e "${YELLOW}请使用端口40001进行 SSH 登陆${NC}"
   else
     echo "跳过 SSH 端口修改。"
   fi
