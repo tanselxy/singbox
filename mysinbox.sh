@@ -712,19 +712,20 @@ generate_vlessIpv6_link() {
   # 使用之前已经获取的值
   ipv6_UUID=$uuid
   ipv6_domain=$domainName
+  ipv6_OptimazationDomain=$domainName
   ipv6_PORT="443"
 
   output=$(timeout 5 openssl s_client -connect "$ipv6_domain:443" -servername "$ipv6_domain" </dev/null 2>&1)
   if echo "$output" | grep -q "BEGIN CERTIFICATE"; then
-    ipv6_domain=$domainName
+    ipv6_OptimazationDomain=$domainName
   else
-    ipv6_domain="csgo.com"
+    ipv6_OptimazationDomain="csgo.com"
   fi
 
 
   # 生成 V2Ray 链接
   #V2RAY_LINK="vless://${V2RAY_UUID}@[${V2RAY_IP}]:${V2RAY_PORT}?security=reality&flow=xtls-rprx-vision&type=tcp&sni=${V2RAY_HOST}&fp=chrome&pbk=${V2RAY_PBK}&sid=${V2RAY_SID}&encryption=none&headerType=none#reality"
-  ipv6_LINK="vless://${ipv6_UUID}@${ipv6_domain}:${ipv6_PORT}?encryption=none&security=tls&type=ws&host=${ipv6_domain}&sni=${ipv6_domain}&path=%2Fvless#ipv6节点"
+  ipv6_LINK="vless://${ipv6_UUID}@${ipv6_OptimazationDomain}:${ipv6_PORT}?encryption=none&security=tls&type=ws&host=${ipv6_domain}&sni=${ipv6_domain}&path=%2Fvless#ipv6节点"
   echo ""
   echo ""
   echo -e "\033[31m==================ipv6只用这个链接：==========================\033[0m"
