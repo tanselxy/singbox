@@ -389,7 +389,7 @@ checkDomin() {
         SERVER="unn.edu.ng"
         ;;
       SG)
-        SERVER="nus.edu.sg"
+        SERVER="mustafa.com.sg"
         ;;
       JP)
         SERVER="www.tms-e.co.jp"
