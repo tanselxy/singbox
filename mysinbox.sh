@@ -53,7 +53,7 @@ generate_strong_password() {
 }
 
 checkisIpv6(){
-  #InstallWarp
+ 
   SERVER_IP=$(curl -4 -s ifconfig.me || curl -4 -s ipinfo.io/ip)
   if [[ -z "$SERVER_IP" ]]; then
       echo "无法获取 IPv4 地址，尝试获取 IPv6 地址..."
@@ -72,7 +72,7 @@ checkisIpv6(){
 InstallWarp() {
     # 让用户必须输入解析在cf的域名
   while true; do
-    read -p "IPv6 必须拥有域名和证书，请先输入您已解析在 Cloudflare 的域名: " domainName
+    read -p "IPv6 必须拥有域名和证书，请先输入您已解析在 Cloudflare 的域名（不要开启小云朵）: " domainName
     # 使用正则匹配域名格式（简单验证）
     if [[ "$domainName" =~ ^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]]; then
      
@@ -110,12 +110,15 @@ InstallWarp() {
       exit 1
   fi
 
-
-
   curl -H 'Cache-Control: no-cache' -o wgcf https://raw.githubusercontent.com/tanselxy/singbox/main/wgcf_2.2.15_linux_amd64
   mv wgcf /usr/local/bin/wgcf
   chmod +x /usr/local/bin/wgcf
-  wgcf register
+  if [[ ! -f wgcf-account.toml ]]; then
+    echo "🔧 第一次注册 Warp 账户..."
+    wgcf register
+  else
+    echo "✅ Warp 账户已存在，跳过注册"
+  fi
   wgcf generate
   sed -i 's/^\(DNS *=.*\)/# \1/' wgcf-profile.conf
   sed -i 's/^\(AllowedIPs *= ::\/0\)/# \1/' wgcf-profile.conf
@@ -127,9 +130,13 @@ EOF
   apt update
   apt install wireguard -y
   cp wgcf-profile.conf /etc/wireguard/wgcf.conf
-  wg-quick up wgcf
+  if ip link show wgcf > /dev/null 2>&1; then
+    echo "✅wgcf 接口已存在，跳过启动"
+  else
+      sudo wg-quick up wgcf
+  fi
   ip=$(curl --interface wgcf https://api.ipify.org)
-  echo "当前warp出来的Ipv4为：$ip"
+  echo "✅当前warp出来的Ipv4为：$ip"
 }
 
 
@@ -699,14 +706,25 @@ enable_and_start_service() {
 
 
 generate_vlessIpv6_link() {
+
+
+
   # 使用之前已经获取的值
   ipv6_UUID=$uuid
   ipv6_domain=$domainName
   ipv6_PORT="443"
 
+  output=$(timeout 5 openssl s_client -connect "$ipv6_domain:443" -servername "$ipv6_domain" </dev/null 2>&1)
+  if echo "$output" | grep -q "BEGIN CERTIFICATE"; then
+    ipv6_domain=$domainName
+  elif
+    ipv6_domain="csgo.com"
+  fi
+
+
   # 生成 V2Ray 链接
   #V2RAY_LINK="vless://${V2RAY_UUID}@[${V2RAY_IP}]:${V2RAY_PORT}?security=reality&flow=xtls-rprx-vision&type=tcp&sni=${V2RAY_HOST}&fp=chrome&pbk=${V2RAY_PBK}&sid=${V2RAY_SID}&encryption=none&headerType=none#reality"
-  ipv6_LINK="vless://${ipv6_UUID}@${ipv6_domain}:${ipv6_PORT}?encryption=none&security=tls&type=ws&sni=${ipv6_domain}&path=%2Fvless#ipv6直连"
+  ipv6_LINK="vless://${ipv6_UUID}@${ipv6_domain}:${ipv6_PORT}?encryption=none&security=tls&type=ws&host=${ipv6_domain}&sni=${ipv6_domain}&path=%2Fvless#ipv6节点"
   echo ""
   echo ""
   echo -e "\033[31m==================ipv6只用这个链接：==========================\033[0m"
