@@ -746,6 +746,7 @@ generate_vlessIpv6_link() {
     echo "域名正常使用"
     ipv6_OptimazationDomain=$domainName
   else
+    echo "域名非正常使用"
     ipv6_OptimazationDomain="csgo.com"
   fi
 
