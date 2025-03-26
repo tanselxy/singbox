@@ -56,11 +56,11 @@ checkisIpv6(){
  
   SERVER_IP=$(curl -4 -s ifconfig.me || curl -4 -s ipinfo.io/ip)
 
+  org=$(curl -s https://ipinfo.io/org)
+  echo "🌐 当前出口 IP 所属组织：$org"
 
-  echo "🌐 当前出口 IP 所属组织：$SERVER_IP"
-
-  if [[ -n "$SERVER_IP" ]]; then
-    if echo "$SERVER_IP" | grep -qi "Cloudflare"; then
+  if [[ -n "$org" ]]; then
+    if echo "$org" | grep -qi "Cloudflare"; then
       while true; do
         read -p "请输入 cloudflare 上的域名: " domainName
         if [[ "$domainName" =~ ^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]]; then
