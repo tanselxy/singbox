@@ -743,6 +743,7 @@ generate_vlessIpv6_link() {
 
   output=$(timeout 5 openssl s_client -connect "$ipv6_domain:443" -servername "$ipv6_domain" </dev/null 2>&1)
   if echo "$output" | grep -q "BEGIN CERTIFICATE"; then
+    echo "域名正常使用"
     ipv6_OptimazationDomain=$domainName
   else
     ipv6_OptimazationDomain="csgo.com"
