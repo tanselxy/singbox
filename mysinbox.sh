@@ -388,9 +388,6 @@ checkDomin() {
       NG)
         SERVER="unn.edu.ng"
         ;;
-      SG)
-        SERVER="moe.gov.sg"
-        ;;
       JP)
         SERVER="www.tms-e.co.jp"
         ;;
