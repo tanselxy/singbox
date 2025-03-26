@@ -55,6 +55,30 @@ generate_strong_password() {
 checkisIpv6(){
  
   SERVER_IP=$(curl -4 -s ifconfig.me || curl -4 -s ipinfo.io/ip)
+
+
+  echo "🌐 当前出口 IP 所属组织：$SERVER_IP"
+
+  # 判断是否是 Cloudflare
+  if [[ -n "$SERVER_IP" ]] && echo "$SERVER_IP" | grep -qi "Cloudflare"; then
+      while true; do
+        read -p "请输入cloudflare上的域名: " domainName
+        # 使用正则匹配域名格式（简单验证）
+        if [[ "$domainName" =~ ^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]]; then
+        
+          break
+        else
+          echo "输入的不是有效的域名格式，请重新输入。"
+        fi
+      done
+  else
+      #echo "🧱 当前 IP 不属于 Cloudflare，说明你走的是 VPS 原生出口"
+  fi
+
+   
+    
+  
+
   if [[ -z "$SERVER_IP" ]]; then
       echo "无法获取 IPv4 地址，尝试获取 IPv6 地址..."
       SERVER_IP=$(curl -6 -s ifconfig.me || curl -6 -s ipinfo.io/ip || curl -6 -s api64.ipify.org)
@@ -70,12 +94,12 @@ checkisIpv6(){
   fi
 }
 InstallWarp() {
-    # 让用户必须输入解析在cf的域名
-  while true; do
+  
+ while true; do
     read -p "IPv6 必须拥有域名和证书，请先输入您已解析在 Cloudflare 的域名（不要开启小云朵）: " domainName
     # 使用正则匹配域名格式（简单验证）
     if [[ "$domainName" =~ ^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]]; then
-     
+    
       break
     else
       echo "输入的不是有效的域名格式，请重新输入。"
@@ -109,6 +133,7 @@ InstallWarp() {
       [[ ! -f "$keyFile" ]] && echo "  - 缺少私钥文件: $keyFile"
       exit 1
   fi
+
 
   curl -H 'Cache-Control: no-cache' -o wgcf https://raw.githubusercontent.com/tanselxy/singbox/main/wgcf_2.2.15_linux_amd64
   mv wgcf /usr/local/bin/wgcf
