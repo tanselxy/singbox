@@ -23,9 +23,9 @@ RANDOM_STR=$(cat /dev/urandom | tr -dc 'a-zA-Z' | fold -w 6 | head -n 1)
 isIpv6=false
 #ipv6的域名
 domainName="";
-#域名的证书
-certFile="/etc/ssl/cert/certCDN.pem"
-keyFile="/etc/ssl/cert/privateCDN.key"
+#域名的证书   默认是bing的证书，如果ipv6会切到你上传的证书
+certFile="/etc/sing-box/cert/cert.pem"
+keyFile="/etc/sing-box/cert/private.key"
 
 get_available_port() {
     local start_range=$1  # 起始端口范围
@@ -61,6 +61,8 @@ checkisIpv6(){
 
   if [[ -n "$org" ]]; then
     if echo "$org" | grep -qi "Cloudflare"; then
+      certFile="/etc/ssl/cert/certCDN.pem"
+      keyFile="/etc/ssl/cert/privateCDN.key"
       while true; do
         read -p "请输入 cloudflare 上的域名: " domainName
         if [[ "$domainName" =~ ^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]]; then
@@ -124,7 +126,8 @@ InstallWarp() {
       echo "域名解析地址与本机 IPv6 不一致，不要开启小云朵，请再次检查 Cloudflare 解析是否正确。"
       exit 1
   fi
-
+  certFile="/etc/ssl/cert/certCDN.pem"
+  keyFile="/etc/ssl/cert/privateCDN.key"
   if [[ -f "$certFile" && -f "$keyFile" ]]; then
     echo "✅ 证书文件和私钥文件已存在，继续配置……"
   else
@@ -615,10 +618,10 @@ configure_singbox() {
         "path": "/vless"
       },
       "tls": {
-        "enabled": true,
+        "enabled": "true",
         "server_name": "$domainName",
-        "certificate_path": "/etc/ssl/cert/certCDN.pem",
-        "key_path": "/etc/ssl/cert/privateCDN.key"
+        "certificate_path": "$certFile",
+        "key_path": "$keyFile"
       }
     },
     {
