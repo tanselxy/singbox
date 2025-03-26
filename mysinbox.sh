@@ -270,9 +270,7 @@ change_ssh_port() {
     if command -v ufw >/dev/null 2>&1; then
         ufw allow $NEW_SSH_PORT/tcp
     fi
-    
-    echo "SSH 端口已修改为: $NEW_SSH_PORT"
-    echo "请使用新端口进行 SSH 连接"
+    echo "${YELLOW}请使用端口40001进行 SSH 登陆${NC}"
   else
     echo "跳过 SSH 端口修改。"
   fi
