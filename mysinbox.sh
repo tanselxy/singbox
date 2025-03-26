@@ -741,8 +741,10 @@ generate_vlessIpv6_link() {
   ipv6_OptimazationDomain=$domainName
   ipv6_PORT="443"
 
-  output=$(timeout 5 openssl s_client -connect "$ipv6_domain:443" -servername "$ipv6_domain" </dev/null 2>&1)
-  if echo "$output" | grep -q "BEGIN CERTIFICATE"; then
+  url="https://cgi.urlsec.qq.com/index.php?m=url&a=validUrl&url=https://$domainName"
+  isUse=$(curl -s "$url")
+
+  if echo "$isUse" | grep -q '"evil_type":0'; then
     echo "域名正常使用"
     ipv6_OptimazationDomain=$domainName
   else
