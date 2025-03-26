@@ -72,7 +72,7 @@ checkisIpv6(){
         fi
       done
   else
-      #echo "🧱 当前 IP 不属于 Cloudflare，说明你走的是 VPS 原生出口"
+      :
   fi
 
    
