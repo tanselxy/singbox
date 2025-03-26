@@ -618,7 +618,7 @@ configure_singbox() {
         "path": "/vless"
       },
       "tls": {
-        "enabled": "true",
+        "enabled": true,
         "server_name": "$domainName",
         "certificate_path": "$certFile",
         "key_path": "$keyFile"
