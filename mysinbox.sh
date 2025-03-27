@@ -156,25 +156,23 @@ InstallWarp() {
   # 读取系统信息
   OS_ID=$(grep '^ID=' /etc/os-release | cut -d'=' -f2 | tr -d '"')
 
-  # 判断系统是 Ubuntu 还是 Debian
-  if [[ "$OS_ID" == "ubuntu" ]]; then
-      echo "检测到 Ubuntu 系统，正在设置 Ubuntu 源..."
-      sudo tee /etc/apt/sources.list <<EOF
-  deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
-  deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
-  deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
-  EOF
-  elif [[ "$OS_ID" == "debian" ]]; then
-      echo "检测到 Debian 系统，正在设置 Debian 源..."
-      sudo tee /etc/apt/sources.list <<EOF
-  deb http://deb.debian.org/debian bookworm main contrib non-free
-  deb http://deb.debian.org/debian bookworm-updates main contrib non-free
-  deb http://security.debian.org/debian-security bookworm-security main contrib non-free
-  EOF
-  else
-      echo "未知系统，无法设置源。"
-      exit 1
-  fi
+
+# 判断系统是 Ubuntu 还是 Debian
+if [[ "$OS_ID" == "ubuntu" ]]; then
+    echo "检测到 Ubuntu 系统，正在设置 Ubuntu 源..."
+    sudo tee /etc/apt/sources.list <<EOF
+deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+EOF
+
+elif [[ "$OS_ID" == "debian" ]]; then
+    echo "检测到 Debian 系统，正在设置 Debian 源..."
+    sudo tee /etc/apt/sources.list <<EOF
+deb http://deb.debian.org/debian bookworm main contrib non-free
+deb http://deb.debian.org/debian bookworm-updates main contrib non-free
+deb http://security.debian.org/debian-security bookworm-security main contrib non-free
+EOF
 
   apt update
   apt install wireguard -y
@@ -536,7 +534,7 @@ configure_singbox() {
         "disable_cache": true
       }
     ],
-    "final": "local-temp"
+    "final": "local"
   },
   "inbounds": [
     {
