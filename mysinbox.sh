@@ -111,7 +111,7 @@ InstallWarp() {
 
 # 获取本机的主 IPv6 地址
   localIPv6=$(curl -6 -s ifconfig.me || curl -6 -s ipinfo.io/ip || curl -6 -s api64.ipify.org)
-
+  apt install dnsutils -y
   # 获取域名解析出来的 IPv6 地址（AAAA 记录）
   domainIPv6=$(dig AAAA "$domainName" +short | head -n1)
 
@@ -151,11 +151,31 @@ InstallWarp() {
   wgcf generate
   sed -i 's/^\(DNS *=.*\)/# \1/' wgcf-profile.conf
   sed -i 's/^\(AllowedIPs *= ::\/0\)/# \1/' wgcf-profile.conf
-  cat > /etc/apt/sources.list <<EOF
-deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
-deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
-deb http://archive.ubuntu.com/ubuntu noble-security main restricted universe multiverse
-EOF
+
+
+  # 读取系统信息
+  OS_ID=$(grep '^ID=' /etc/os-release | cut -d'=' -f2 | tr -d '"')
+
+  # 判断系统是 Ubuntu 还是 Debian
+  if [[ "$OS_ID" == "ubuntu" ]]; then
+      echo "检测到 Ubuntu 系统，正在设置 Ubuntu 源..."
+      sudo tee /etc/apt/sources.list <<EOF
+  deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+  deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+  deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+  EOF
+  elif [[ "$OS_ID" == "debian" ]]; then
+      echo "检测到 Debian 系统，正在设置 Debian 源..."
+      sudo tee /etc/apt/sources.list <<EOF
+  deb http://deb.debian.org/debian bookworm main contrib non-free
+  deb http://deb.debian.org/debian bookworm-updates main contrib non-free
+  deb http://security.debian.org/debian-security bookworm-security main contrib non-free
+  EOF
+  else
+      echo "未知系统，无法设置源。"
+      exit 1
+  fi
+
   apt update
   apt install wireguard -y
   cp wgcf-profile.conf /etc/wireguard/wgcf.conf
