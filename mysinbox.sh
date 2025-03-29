@@ -173,7 +173,7 @@ deb http://deb.debian.org/debian bookworm main contrib non-free
 deb http://deb.debian.org/debian bookworm-updates main contrib non-free
 deb http://security.debian.org/debian-security bookworm-security main contrib non-free
 EOF
-
+fi
   apt update
   apt install wireguard -y
   cp wgcf-profile.conf /etc/wireguard/wgcf.conf
