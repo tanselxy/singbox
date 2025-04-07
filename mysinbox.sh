@@ -534,7 +534,8 @@ configure_singbox() {
         "disable_cache": true
       }
     ],
-    "final": "local"
+    "final": "local-temp",
+    "strategy": "prefer_ipv4"
   },
   "inbounds": [
     {
@@ -690,11 +691,6 @@ configure_singbox() {
   ],
   "route": {
     "rules": [
-      {
-        "protocol": ["http", "https"],
-        "domain": ["chat.openai.com"],
-        "outbound": "warp"
-      },
       {
         "rule_set": ["private", "cn"],
         "outbound": "direct"
