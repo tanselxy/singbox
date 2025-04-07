@@ -686,10 +686,6 @@ configure_singbox() {
     {
       "type": "direct",
       "tag": "direct"
-    },
-    {
-      "type": "block",
-      "tag": "block"
     }${CHATGPT_OUTBOUND}
   ],
   "route": {
@@ -705,7 +701,7 @@ configure_singbox() {
       },
       {
         "rule_set": ["category-ads-all"],
-        "outbound": "block"
+        "action": "reject"
       }
     ],
     "rule_set": [
