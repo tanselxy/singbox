@@ -534,7 +534,7 @@ configure_singbox() {
         "disable_cache": true
       }
     ],
-    "final": "local-temp",
+    "final": "local",
     "strategy": "prefer_ipv4"
   },
   "inbounds": [
