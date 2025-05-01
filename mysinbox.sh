@@ -623,7 +623,7 @@ configure_singbox() {
       "type": "vless",
       "tag": "vless-cdn",
       "listen": "::",
-      "listen_port": 443,
+      "listen_port": 4433,
       "users": [
         {
           "uuid": "$uuid"
