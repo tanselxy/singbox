@@ -188,10 +188,10 @@ fi
 
 
 
-# 更新系统软件安装Sing-Box
+# 更新系统软件安装Sing-Box && sudo apt upgrade -y
 install_singbox() {
   echo "更新升级系统软件包..."
-  sudo apt update && sudo apt upgrade -y
+  sudo apt update 
   echo "修改系统时区为上海..."
   sudo timedatectl set-timezone Asia/Shanghai
   echo "正在安装 Sing-Box..." && curl -fsSL https://sing-box.app/deb-install.sh | bash
