@@ -9,6 +9,22 @@
 
 set -euo pipefail
 
+
+
+# 颜色定义
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly NC='\033[0m'
+
+BLACK='\033[0;30m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[0;37m'
+BOLD_WHITE='\033[1;37m'
+PURPLE='\033[0;35m'
+
 # 全局配置
 readonly SCRIPT_VERSION="2.1"
 readonly LOG_FILE="/var/log/singbox-deploy.log"
@@ -36,19 +52,7 @@ readonly REPO_NAME="singbox"
 readonly BRANCH="main"
 readonly GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_USER/$REPO_NAME/$BRANCH"
 
-# 颜色定义
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m'
 
-BLACK='\033[0;30m'
-MAGENTA='\033[0;35m'
-CYAN='\033[0;36m'
-WHITE='\033[0;37m'
-BOLD_WHITE='\033[1;37m'
-PURPLE='\033[0;35m'
 
 # 配置变量
 DOWNLOAD_PORT=14567
