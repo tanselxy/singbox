@@ -476,16 +476,22 @@ main() {
         exit 1
     fi
     
+    # 依赖检查成功后的提示
+    printf "${GREEN}🎉 脚本准备完成，所有依赖已就绪！${NC}\n\n"
+    
     # 如果有参数，直接执行对应功能
     if [[ $# -gt 0 ]]; then
         case "$1" in
             install|deploy)
+                printf "${BLUE}🚀 开始全新安装部署...${NC}\n"
                 deploy_fresh_install
                 ;;
             config)
+                printf "${BLUE}🔧 重新生成配置...${NC}\n"
                 regenerate_config
                 ;;
             info)
+                printf "${BLUE}📋 显示连接信息...${NC}\n"
                 show_connection_info
                 ;;
             download-deps)
@@ -505,12 +511,9 @@ main() {
         exit 0
     fi
     
-    # 如果所有依赖都加载成功，继续原有的交互式菜单逻辑
-    # [这里保持原有的while循环菜单代码]
-    
-    printf "${GREEN}🎉 脚本准备完成，所有依赖已就绪，开始安装！${NC}\n"
-    # 运行主函数
-    main "$@"
+    # 如果没有参数，显示交互式菜单提示
+    printf "${BLUE}💡 运行 './install.sh install' 开始安装，或查看帮助信息${NC}\n"
+    printf "${YELLOW}📖 用法: $0 [install|config|info|download-deps]${NC}\n"
 }
 
 # 错误处理
@@ -528,3 +531,5 @@ cleanup_on_exit() {
 
 trap cleanup_on_exit EXIT
 
+# 运行主函数
+main "$@"
