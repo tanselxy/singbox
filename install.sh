@@ -538,9 +538,24 @@ main() {
     
     # 如果没有参数
     if [[ "$IS_PIPED_EXECUTION" == true ]]; then
-        # 管道执行时，如果没有参数，自动开始安装
-        printf "${GREEN}🚀 检测到管道执行，自动开始安装部署...${NC}\n\n"
-        deploy_fresh_install
+        # 管道执行时，询问用户是否立即安装
+        printf "${YELLOW}❓ 是否立即开始安装 Sing-Box？${NC}\n"
+        printf "${BLUE}[Y/n]: ${NC}"
+        
+        # 等待用户输入，5秒后自动选择Y
+        if read -t 5 -r choice || [[ -z "$choice" ]]; then
+            choice=${choice:-y}
+            if [[ "$choice" =~ ^[Yy]$ ]] || [[ -z "$choice" ]]; then
+                printf "\n${GREEN}🚀 开始自动安装部署...${NC}\n\n"
+                deploy_fresh_install
+            else
+                printf "\n${BLUE}💡 取消安装，使用以下命令手动安装:${NC}\n"
+                printf "${YELLOW}cd $SCRIPT_DIR && ./install.sh install${NC}\n"
+            fi
+        else
+            printf "\n${GREEN}🚀 超时自动开始安装...${NC}\n\n"
+            deploy_fresh_install
+        fi
     else
         # 本地执行时，显示交互式菜单提示
         printf "${BLUE}💡 运行 './install.sh install' 开始安装，或查看帮助信息${NC}\n"
