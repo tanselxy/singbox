@@ -1,0 +1,164 @@
+# Sing-Box 客户端配置模板
+# 生成时间: {{GENERATION_TIME}}
+
+mixed-port: 10801
+allow-lan: true
+bind-address: "*"
+mode: rule
+log-level: info
+ipv6: true
+external-controller: 0.0.0.0:9093
+secret: "123456"
+global-client-fingerprint: chrome
+
+profile:
+  store-selected: true
+  store-fake-ip: true
+
+sniffer:
+  enable: true
+  sniffing: [tls, http]
+
+dns:
+  enable: true
+  prefer-h3: true
+  listen: 0.0.0.0:53
+  ipv6: true
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  default-nameserver: [114.114.114.114, 223.5.5.5]
+  nameserver:
+    - 114.114.114.114
+    - 223.5.5.5
+    - https://doh.pub/dns-query
+  fallback:
+    - 8.8.8.8
+    - 1.1.1.1
+    - https://cloudflare-dns.com/dns-query
+
+proxies:
+  # Reality VLESS 协议
+  - name: "Reality"
+    type: vless
+    server: "{{SERVER_IP}}"
+    port: "{{VLESS_PORT}}"
+    uuid: "{{UUID}}"
+    network: tcp
+    udp: true
+    tls: true
+    flow: xtls-rprx-vision
+    servername: "{{SERVER}}"
+    client-fingerprint: chrome
+    reality-opts:
+      public-key: Y_-yCHC3Qi-Kz6OWpueQckAJSQuGEKffwWp8MlFgwTs
+      short-id: 0123456789abcded
+
+  # Hysteria2 协议
+  - name: "Hysteria2"
+    type: hysteria2
+    server: "{{SERVER_IP}}"
+    port: "{{HYSTERIA_PORT}}"
+    password: "{{HYSTERIA_PASSWORD}}"
+    sni: bing.com
+    skip-cert-verify: true
+    alpn: [h3]
+
+  # Trojan WebSocket 协议
+  - name: "Trojan-WS"
+    type: trojan
+    server: "{{SERVER_IP}}"
+    port: 63333
+    password: "{{HYSTERIA_PASSWORD}}"
+    sni: bing.com
+    network: ws
+    ws-opts:
+      path: "/trojan"
+      headers:
+        Host: bing.com
+    skip-cert-verify: true
+    udp: true
+
+  # TUIC 协议
+  - name: "TUIC"
+    type: tuic
+    server: "{{SERVER_IP}}"
+    port: 61555
+    uuid: "{{UUID}}"
+    password: ""
+    alpn: [h3]
+    disable-sni: false
+    reduce-rtt: true
+    request-timeout: 8000
+    udp-relay-mode: native
+    congestion-controller: bbr
+    sni: bing.com
+    skip-cert-verify: true
+
+  # ShadowSocks 专线
+  - name: "SS-Direct"
+    type: ss
+    server: "{{SERVER_IP}}"
+    port: 59000
+    cipher: aes-128-gcm
+    password: "{{HYSTERIA_PASSWORD}}"
+    udp: true
+
+  # IPv6 VLESS WebSocket (仅在有域名时启用)
+  # {{#if DOMAIN_NAME}}
+  # - name: "IPv6-Node"
+  #   type: vless
+  #   server: "{{DOMAIN_NAME}}"
+  #   port: 443
+  #   uuid: "{{UUID}}"
+  #   network: ws
+  #   tls: true
+  #   servername: "{{DOMAIN_NAME}}"
+  #   ws-opts:
+  #     path: "/vless"
+  #     headers:
+  #       Host: "{{DOMAIN_NAME}}"
+  #   skip-cert-verify: false
+  #   udp: true
+  # {{/if}}
+
+proxy-groups:
+  - name: PROXY
+    type: select
+    proxies: 
+      - Reality
+      - Hysteria2
+      - Trojan-WS
+      - TUIC
+      - SS-Direct
+      # {{#if DOMAIN_NAME}}
+      # - IPv6-Node
+      # {{/if}}
+
+  - name: Auto
+    type: url-test
+    proxies:
+      - Reality
+      - Hysteria2
+      - TUIC
+      - SS-Direct
+    url: 'http://www.gstatic.com/generate_204'
+    interval: 300
+
+  - name: Fallback
+    type: fallback
+    proxies:
+      - Reality
+      - Hysteria2
+      - TUIC
+    url: 'http://www.gstatic.com/generate_204'
+    interval: 300
+
+rules:
+  # 局域网直连
+  - GEOIP,LAN,DIRECT
+  
+  # 中国大陆直连
+  - GEOIP,CN,DIRECT
+  
+  # 默认走代理
+  - MATCH,PROXY

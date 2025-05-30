@@ -1,0 +1,222 @@
+{
+  "log": {
+    "disabled": false,
+    "level": "info",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "local",
+        "address": "https://1.1.1.1/dns-query",
+        "detour": "direct"
+      },
+      {
+        "tag": "local-temp",
+        "address": "2001:4860:4860::8888",
+        "detour": "direct"
+      },
+      {
+        "tag": "block",
+        "address": "rcode://success"
+      }
+    ],
+    "rules": [
+      {
+        "rule_set": ["cn"],
+        "server": "local"
+      },
+      {
+        "rule_set": ["category-ads-all"],
+        "server": "block",
+        "disable_cache": true
+      }
+    ],
+    "final": "local",
+    "strategy": "prefer_ipv4"
+  },
+  "inbounds": [
+    {
+      "type": "shadowtls",
+      "tag": "st-in",
+      "listen": "::",
+      "listen_port": {{SS_PORT}},
+      "version": 3,
+      "users": [
+        {
+          "name": "username",
+          "password": "AaaY/lgWSBlSQtDmd0UpFnqR1JJ9JTHn0CLBv12KO5o="
+        }
+      ],
+      "handshake": {
+        "server": "{{SERVER}}",
+        "server_port": 443
+      },
+      "strict_mode": true,
+      "detour": "ss-in"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "ss-in",
+      "listen": "127.0.0.1",
+      "listen_port": 10808,
+      "network": "tcp",
+      "method": "2022-blake3-chacha20-poly1305",
+      "password": "{{SS_PASSWORD}}"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "ss-ix",
+      "listen": "::",
+      "listen_port": 59000,
+      "method": "aes-128-gcm",
+      "password": "{{HYSTERIA_PASSWORD}}"
+    },
+    {
+      "type": "tuic",
+      "tag": "tuic-in",
+      "listen": "::",
+      "listen_port": 61555,
+      "users": [
+        {
+          "uuid": "{{UUID}}"
+        }
+      ],
+      "congestion_control": "bbr",
+      "tls": {
+        "enabled": true,
+        "server_name": "bing.com",
+        "alpn": ["h3"],
+        "certificate_path": "{{CERT_FILE}}",
+        "key_path": "{{KEY_FILE}}"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "vless-in",
+      "listen": "::",
+      "listen_port": {{VLESS_PORT}},
+      "users": [
+        {
+          "uuid": "{{UUID}}",
+          "flow": "xtls-rprx-vision"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "{{SERVER}}",
+        "reality": {
+          "enabled": true,
+          "handshake": {
+            "server": "{{SERVER}}",
+            "server_port": 443
+          },
+          "private_key": "QNJo_UznAk69XQeWNKtY-RdsfzJE-s5uAFso5tARWkA",
+          "short_id": ["0123456789abcded"]
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "vless-cdn",
+      "listen": "::",
+      "listen_port": 4433,
+      "users": [
+        {
+          "uuid": "{{UUID}}"
+        }
+      ],
+      "transport": {
+        "type": "ws",
+        "path": "/vless"
+      },
+      "tls": {
+        "enabled": true,
+        "server_name": "{{DOMAIN_NAME}}",
+        "certificate_path": "{{CERT_FILE}}",
+        "key_path": "{{KEY_FILE}}"
+      }
+    },
+    {
+      "type": "trojan",
+      "tag": "trojan-in",
+      "listen": "::",
+      "listen_port": 63333,
+      "users": [
+        {
+          "password": "{{HYSTERIA_PASSWORD}}"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "bing.com",
+        "certificate_path": "{{CERT_FILE}}",
+        "key_path": "{{KEY_FILE}}"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/trojan"
+      }
+    },
+    {
+      "sniff": true,
+      "sniff_override_destination": true,
+      "type": "hysteria2",
+      "tag": "hy2-in",
+      "listen": "::",
+      "listen_port": {{HYSTERIA_PORT}},
+      "users": [
+        {
+          "password": "{{HYSTERIA_PASSWORD}}"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "alpn": ["h3"],
+        "certificate_path": "{{CERT_FILE}}",
+        "key_path": "{{KEY_FILE}}"
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "rule_set": ["private", "cn"],
+        "outbound": "direct"
+      },
+      {
+        "rule_set": ["category-ads-all"],
+        "action": "reject"
+      }
+    ],
+    "rule_set": [
+      {
+        "tag": "cn",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs",
+        "download_detour": "direct"
+      },
+      {
+        "tag": "private",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-private.srs",
+        "download_detour": "direct"
+      },
+      {
+        "tag": "category-ads-all",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads.srs",
+        "download_detour": "direct"
+      }
+    ]
+  }
+}

@@ -401,7 +401,7 @@ checkDomin() {
 
     case $COUNTRY_CODE in
       TW)
-        SERVER="ntu.edu.tw"
+        SERVER="www.apple.com"
         ;;
       NG)
         SERVER="unn.edu.ng"
@@ -419,7 +419,7 @@ checkDomin() {
         SERVER="www.mediamarkt.de"
         ;;
       HK)
-        SERVER="www.hkbu.edu.hk"
+        SERVER="www.apple.com"
         ;;
       *)
         SERVER="www.apple.com"
