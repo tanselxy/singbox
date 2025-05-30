@@ -15,7 +15,20 @@ readonly LOG_FILE="/var/log/singbox-deploy.log"
 readonly CONFIG_DIR="/etc/sing-box"
 readonly CERT_DIR="$CONFIG_DIR/cert"
 readonly TEMP_DIR="/tmp/singbox-deploy-$$"
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# 检测执行方式
+IS_PIPED_EXECUTION=false
+if [[ ! -f "${BASH_SOURCE[0]:-$0}" ]] || [[ "${BASH_SOURCE[0]:-$0}" == "bash" ]]; then
+    IS_PIPED_EXECUTION=true
+fi
+
+# 根据执行方式设置脚本目录
+if [[ "$IS_PIPED_EXECUTION" == true ]]; then
+    readonly SCRIPT_DIR="/tmp/singbox-install-$"
+    mkdir -p "$SCRIPT_DIR"
+    printf "${YELLOW}💡 检测到管道执行方式，依赖文件将下载到: $SCRIPT_DIR${NC}\n"
+else
+    readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+fi
 
 # GitHub仓库配置
 readonly GITHUB_USER="tanselxy"
@@ -243,21 +256,33 @@ validate_dependencies() {
 
 # 智能依赖管理
 smart_dependency_management() {
-    # 如果所有文件都存在且完整，跳过下载
-    if validate_dependencies >/dev/null 2>&1; then
-        printf "${GREEN}📋 依赖检查通过，跳过下载步骤${NC}\n"
-        return 0
-    fi
-    
-    # 下载缺失或损坏的文件
-    if ! download_dependencies; then
-        printf "${RED}❌ 依赖文件下载失败${NC}\n"
-        printf "${YELLOW}💡 解决方案:${NC}\n"
-        printf "  1. 检查网络连接\n"
-        printf "  2. 手动下载文件到脚本目录\n"
-        printf "  3. 使用代理或VPN\n"
-        printf "  4. 联系技术支持\n"
-        return 1
+    # 如果是管道执行，强制下载所有依赖
+    if [[ "$IS_PIPED_EXECUTION" == true ]]; then
+        printf "${BLUE}📦 管道执行模式，下载所有依赖文件...${NC}\n"
+        if ! download_dependencies; then
+            printf "${RED}❌ 依赖文件下载失败${NC}\n"
+            printf "${YELLOW}💡 建议使用本地安装方式:${NC}\n"
+            printf "  wget https://raw.githubusercontent.com/$GITHUB_USER/$REPO_NAME/$BRANCH/install.sh\n"
+            printf "  chmod +x install.sh && ./install.sh\n"
+            return 1
+        fi
+    else
+        # 如果所有文件都存在且完整，跳过下载
+        if validate_dependencies >/dev/null 2>&1; then
+            printf "${GREEN}📋 依赖检查通过，跳过下载步骤${NC}\n"
+            return 0
+        fi
+        
+        # 下载缺失或损坏的文件
+        if ! download_dependencies; then
+            printf "${RED}❌ 依赖文件下载失败${NC}\n"
+            printf "${YELLOW}💡 解决方案:${NC}\n"
+            printf "  1. 检查网络连接\n"
+            printf "  2. 手动下载文件到脚本目录\n"
+            printf "  3. 使用代理或VPN\n"
+            printf "  4. 联系技术支持\n"
+            return 1
+        fi
     fi
     
     # 再次验证
@@ -522,6 +547,11 @@ cleanup_on_exit() {
     
     # 清理临时文件
     rm -rf "$TEMP_DIR" 2>/dev/null || true
+    
+    # 如果是管道执行，清理下载的依赖文件
+    if [[ "$IS_PIPED_EXECUTION" == true ]] && [[ -d "$SCRIPT_DIR" ]]; then
+        rm -rf "$SCRIPT_DIR" 2>/dev/null || true
+    fi
     
     if [[ $exit_code -ne 0 ]]; then
         printf "\n${RED}❌ 脚本执行过程中出现错误 (退出码: $exit_code)${NC}\n"
