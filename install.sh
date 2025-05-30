@@ -508,8 +508,9 @@ main() {
     # 如果所有依赖都加载成功，继续原有的交互式菜单逻辑
     # [这里保持原有的while循环菜单代码]
     
-    printf "${GREEN}🎉 脚本准备完成，所有依赖已就绪！${NC}\n"
-    printf "${BLUE}现在可以使用 './install.sh install' 开始安装${NC}\n"
+    printf "${GREEN}🎉 脚本准备完成，所有依赖已就绪，开始安装！${NC}\n"
+    # 运行主函数
+    main "$@"
 }
 
 # 错误处理
@@ -527,5 +528,3 @@ cleanup_on_exit() {
 
 trap cleanup_on_exit EXIT
 
-# 运行主函数
-main "$@"
