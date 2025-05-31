@@ -125,7 +125,7 @@ clear
     # URL+║ 文本: "https://my.racknerd.com/aff.php?aff=10790║" (长度 44)
     # 整行有效内容显示长度 (包括前导空格和结尾的║): 4 + 44 = 48
     line1_leading_spaces_count=4
-    line1_content_text="https://my.racknerd.com/aff.php?aff=10790" # 不包括║，方便添加颜色
+    line1_content_text="https://my.racknerd.com/aff.php?aff=10790&pid=912" # 不包括║，方便添加颜色
     line1_trailing_char=""
     line1_effective_display_width=$((line1_leading_spaces_count + ${#line1_content_text} + ${#line1_trailing_char}))
 
