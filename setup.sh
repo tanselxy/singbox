@@ -24,7 +24,7 @@ check_dependencies() {
     info "检查系统依赖..."
     
     if ! command -v wget &> /dev/null; then
-        error "wget 未安装，正在安装..."
+        info "wget 未安装，正在安装..."
         if command -v apt &> /dev/null; then
             apt update && apt install -y wget
         elif command -v yum &> /dev/null; then

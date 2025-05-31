@@ -255,17 +255,17 @@ initialize() {
 
 # 更新系统并安装Sing-Box
 install_singbox() {
-    log_info "更新系统软件包,请耐心等待1-2分钟..."
+    #log_info "更新系统软件包,请耐心等待1-2分钟..."
     export DEBIAN_FRONTEND=noninteractive
     
-    case "$PACKAGE_MANAGER" in
-        "apt")
-            apt-get update >/dev/null 2>&1
-            ;;
-        "yum"|"dnf")
-            $PACKAGE_MANAGER update -y >/dev/null 2>&1
-            ;;
-    esac
+    # case "$PACKAGE_MANAGER" in
+    #     "apt")
+    #         apt-get update >/dev/null 2>&1
+    #         ;;
+    #     "yum"|"dnf")
+    #         $PACKAGE_MANAGER update -y >/dev/null 2>&1
+    #         ;;
+    # esac
     
     log_info "设置系统时区为上海..."
     timedatectl set-timezone Asia/Shanghai 2>/dev/null || true
