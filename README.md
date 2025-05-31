@@ -19,10 +19,9 @@ singbox-deploy/
 
 ## 🚀 快速开始
 
-### 1. 下载和准备
+### 1. 执行安装脚本
 
 ```bash
-# 执行后会自动下载所需脚本并安装singbox
 bash <(curl -sL singbox.soups.eu.org/get)
 ```
 
@@ -94,16 +93,10 @@ bash <(curl -sL singbox.soups.eu.org/get)
 - **Hysteria2**
 - **Trojan WebSocket**
 - **TUIC**
-- **ShadowSocks 专线**
+- **ShadowSocks 仅限专线使用**
 - **VLESS WebSocket CDN**
 
 #### 客户端模板 (client_template.yaml)
-
-Clash风格的客户端配置：
-
-- **代理组配置** - 手动选择、自动测速、故障转移
-- **分流规则** - 中国大陆直连，其他走代理
-- **DNS配置** - 优化的DNS设置
 
 ## 🔌 支持的协议
 
@@ -115,7 +108,7 @@ Clash风格的客户端配置：
 | **Trojan WS** | 63333 | WebSocket传输 | CDN加速 |
 | **TUIC** | 61555 | 现代QUIC协议 | 低延迟 |
 | **SS Direct** | 59000 | 简单稳定 | 备用线路 |
-| **VLESS CDN** | 4433 | CDN友好 | IPv6环境 |
+| **VLESS CDN** | 4433 | CDN友好 | 如果你的vps只有IPv6环境，仅此协议可用 |
 
 ## 📱 客户端支持
 
@@ -151,46 +144,7 @@ Clash风格的客户端配置：
 - **BBR加速** - 优化网络性能
 - **自动清理** - 定时清理敏感文件
 
-## 🛠️ 高级用法
 
-### 配置管理
-
-```bash
-# 备份当前配置
-sudo ./install.sh backup
-
-# 重置所有密码
-sudo ./install.sh reset-credentials
-
-# 更新特定参数
-sudo ./install.sh update-param uuid new-uuid-value
-
-# 导出配置包
-sudo ./install.sh export
-```
-
-### 协议管理
-
-```bash
-# 禁用特定协议
-sudo ./install.sh toggle-protocol hysteria2 disable
-
-# 启用特定协议
-sudo ./install.sh toggle-protocol reality enable
-
-# 查看配置摘要
-sudo ./install.sh summary
-```
-
-### 连通性测试
-
-```bash
-# 测试所有端口
-sudo ./install.sh test-connectivity
-
-# 验证配置文件
-sudo ./install.sh validate-config
-```
 
 ## 📊 监控和日志
 
@@ -216,72 +170,15 @@ ss -tuln | grep sing-box
 top -p $(pidof sing-box)
 ```
 
-## 🚨 故障排除
-
-### 常见问题
-
-#### 1. 服务启动失败
-
-```bash
-# 检查配置文件语法
-sing-box check -c /etc/sing-box/config.json
-
-# 查看详细错误
-journalctl -u sing-box --no-pager -l
-```
-
-#### 2. 端口被占用
-
-```bash
-# 查看端口占用
-lsof -i:端口号
-
-# 释放端口
-sudo fuser -k 端口号/tcp
-```
-
-#### 3. 证书问题
-
-```bash
-# 重新生成自签证书
-openssl ecparam -genkey -name prime256v1 -out /etc/sing-box/cert/private.key
-openssl req -new -x509 -days 36500 -key /etc/sing-box/cert/private.key -out /etc/sing-box/cert/cert.pem -subj "/CN=bing.com"
-```
-
-#### 4. 网络连接问题
-
-```bash
-# 测试外网连接
-curl -4 ifconfig.me
-curl -6 ifconfig.me
-
-# 检查DNS解析
-nslookup google.com
-
-# 测试端口连通性
-telnet 服务器IP 端口
-```
-
-### 紧急恢复
-
-```bash
-# 停止所有服务
-sudo systemctl stop sing-box
-
-# 恢复默认配置
-sudo ./install.sh config
-
-# 重启服务
-sudo systemctl start sing-box
-```
-
 ## 📋 系统要求
 
 ### 操作系统
 
 - **Ubuntu** 18.04+ 
 - **Debian** 10+
-- **CentOS** 8+ (实验性支持)
+- **CentOS** 8+ 
+- **AlmaLinux** 8+
+- **Rock** 
 
 ### 硬件要求
 
@@ -292,37 +189,10 @@ sudo systemctl start sing-box
 
 ### 网络环境
 
-- **IPv4**: 必需
+- **IPv4**: 可选
 - **IPv6**: 可选
-- **域名**: 可选（IPv6环境推荐）
+- **域名**:  可选（IPv6环境推荐）
 - **证书**: 自动生成或手动提供
-
-## 🤝 贡献指南
-
-### 开发环境
-
-```bash
-# 克隆项目
-git clone https://github.com/your-repo/singbox-deploy.git
-cd singbox-deploy
-
-# 设置开发环境
-chmod +x *.sh
-```
-
-### 代码规范
-
-- 使用 `bash` Shell
-- 遵循 Google Shell Style Guide
-- 添加详细的注释
-- 包含错误处理
-
-### 提交流程
-
-1. Fork 项目
-2. 创建功能分支
-3. 编写代码和测试
-4. 提交 Pull Request
 
 ## 📄 许可证
 
@@ -330,9 +200,8 @@ chmod +x *.sh
 
 ## 🆘 获取帮助
 
-- **GitHub Issues**: [提交问题](https://github.com/your-repo/singbox-deploy/issues)
-- **讨论区**: [参与讨论](https://github.com/your-repo/singbox-deploy/discussions)
-- **Telegram**: [@SingBoxSupport](https://t.me/SingBoxSupport)
+- **GitHub Issues**: [提交问题](https://github.com/tanselxy/singbox/issues)
+- **Telegram**: [vps交流群](https://t.me/singboxy)
 
 ---
 
