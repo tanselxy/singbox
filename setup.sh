@@ -23,6 +23,7 @@ error() {
 check_dependencies() {
     info "检查系统依赖..."
     
+    # 检查wget
     if ! command -v wget &> /dev/null; then
         info "wget 未安装，正在安装..."
         if command -v apt &> /dev/null; then
@@ -31,6 +32,19 @@ check_dependencies() {
             yum install -y wget
         else
             error "无法自动安装wget，请手动安装"
+            exit 1
+        fi
+    fi
+    
+    # 检查python3
+    if ! command -v python3 &> /dev/null; then
+        info "python3 未安装，正在安装..."
+        if command -v apt &> /dev/null; then
+            apt update && apt install -y python3
+        elif command -v yum &> /dev/null; then
+            yum install -y python3
+        else
+            error "无法自动安装python3，请手动安装"
             exit 1
         fi
     fi
