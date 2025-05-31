@@ -195,7 +195,6 @@ clear
 
 download_file() {
      mkdir -p "SingboxInstall"
-     cd "SingboxInstall"
      wget -O install.sh https://raw.githubusercontent.com/tanselxy/singbox/main/install.sh
      wget -O client_template.yaml https://raw.githubusercontent.com/tanselxy/singbox/main/client_template.yaml
      wget -O config.sh https://raw.githubusercontent.com/tanselxy/singbox/main/config.sh
