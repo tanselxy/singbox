@@ -190,20 +190,11 @@ clear
     printf "%s${NC}\n" "$BR"
 
     # 您原来版本中信息块之后的空行，如果需要，可以在调用此函数后再用 echo 添加
+    
 
 }
 
-download_file() {
-     mkdir -p "SingboxInstall"
-     wget -O install.sh https://raw.githubusercontent.com/tanselxy/singbox/main/install.sh
-     wget -O client_template.yaml https://raw.githubusercontent.com/tanselxy/singbox/main/client_template.yaml
-     wget -O config.sh https://raw.githubusercontent.com/tanselxy/singbox/main/config.sh
-     wget -O network.sh https://raw.githubusercontent.com/tanselxy/singbox/main/network.sh
-     wget -O server_template.json https://raw.githubusercontent.com/tanselxy/singbox/main/server_template.json
-     wget -O utils.sh https://raw.githubusercontent.com/tanselxy/singbox/main/utils.sh
-     chmod +x *.sh
-     ./install.sh
-}
+
 
 # 初始化函数
 initialize() {
