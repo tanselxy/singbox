@@ -36,13 +36,25 @@ check_dependencies() {
     fi
 }
 
+# 显示进度条
+show_progress() {
+    local current=$1
+    local total=$2
+    local width=50
+    local percentage=$((current * 100 / total))
+    local completed=$((current * width / total))
+    
+    printf "\r${GREEN}[INFO]${NC} 下载进度: ["
+    printf "%*s" $completed | tr ' ' '='
+    printf "%*s" $((width - completed)) | tr ' ' '-'
+    printf "] %d%% (%d/%d)" $percentage $current $total
+}
+
 # 下载文件函数
 download_files() {
     info "创建安装目录..."
     mkdir -p "SingboxInstall"
     cd SingboxInstall
-    
-    info "开始下载文件..."
     
     # 文件列表
     files=(
@@ -52,25 +64,39 @@ download_files() {
         "network.sh"
         "server_template.json"
         "utils.sh"
-        "fix_centos.sh"
     )
+    
+    local total=${#files[@]}
+    local current=0
+    local failed_files=()
+    
+    info "开始下载文件..."
     
     # 下载每个文件
     for file in "${files[@]}"; do
-        info "下载 $file..."
-        if wget -q --show-progress -O "$file" "https://raw.githubusercontent.com/tanselxy/singbox/main/$file"; then
-            info "✓ $file 下载成功"
+        ((current++))
+        show_progress $current $total
+        
+        if wget -q -O "$file" "https://raw.githubusercontent.com/tanselxy/singbox/main/$file" 2>/dev/null; then
+            # 下载成功，不显示信息
+            :
         else
-            warning "✗ $file 下载失败，跳过..."
+            failed_files+=("$file")
         fi
     done
     
-    # 给sh文件添加执行权限
-    info "设置执行权限..."
-    chmod +x *.sh
+    # 完成进度条
+    echo
     
-    info "所有文件下载完成！"
-    ls -la
+    # 给sh文件添加执行权限
+    chmod +x *.sh 2>/dev/null
+    
+    # 显示结果
+    if [ ${#failed_files[@]} -eq 0 ]; then
+        info "✓ 所有文件下载完成！"
+    else
+        info "✓ 下载完成，但以下文件失败: ${failed_files[*]}"
+    fi
 }
 
 # 执行安装
@@ -86,13 +112,14 @@ run_install() {
 
 # 主函数
 main() {
-
     check_dependencies
     download_files
     
 
+    
+   
     run_install
- 
+   
 }
 
 # 执行主函数
