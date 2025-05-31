@@ -387,13 +387,13 @@ install_singbox_manual() {
     version_info=$(sing-box version 2>/dev/null || echo "版本获取失败")
     log_info "安装的版本: $version_info"
     
-    # 创建系统用户
-    log_info "创建系统用户..."
-    if ! id sing-box >/dev/null 2>&1; then
-        useradd -r -s /sbin/nologin sing-box 2>/dev/null || {
-            log_warn "创建用户失败，使用root运行"
-        }
-    fi
+    # # 创建系统用户
+    # log_info "创建系统用户..."
+    # if ! id sing-box >/dev/null 2>&1; then
+    #     useradd -r -s /sbin/nologin sing-box 2>/dev/null || {
+    #         log_warn "创建用户失败，使用root运行"
+    #     }
+    # fi
     
     # 创建systemd服务文件
     log_info "创建系统服务..."
