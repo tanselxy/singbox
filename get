@@ -1,0 +1,1 @@
+bash <(curl -sL https://tanselxy.github.io/singbox/setup.sh)
