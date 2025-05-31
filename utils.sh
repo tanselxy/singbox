@@ -564,10 +564,10 @@ schedule_cleanup() {
         pid=$(lsof -t -i:"$DOWNLOAD_PORT" 2>/dev/null || echo "")
         if [[ -n "$pid" ]]; then
             kill -9 "$pid" 2>/dev/null || true
-            log_info "HTTP服务已关闭"
+            #log_info "HTTP服务已关闭"
         fi
         
-        log_info "清理任务完成"
+        #log_info "清理任务完成"
     ) &
 }
 
