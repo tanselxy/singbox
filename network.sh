@@ -14,7 +14,7 @@ detect_ip_and_setup() {
     log_info "检测服务器IP地址..."
     
     # 尝试获取IPv4地址
-    SERVER_IP=$(curl -4 -s --max-time 10 ifconfig.me || curl -4 -s --max-time 10 ipinfo.io/ip || echo "")
+    SERVER_IP=$(curl -4 -s https://api64.ipify.org ||curl -4 -s --max-time 10 ifconfig.me || curl -4 -s --max-time 10 ipinfo.io/ip || echo "")
     
     if [[ -n "$SERVER_IP" ]]; then
         log_info "获取到IPv4地址: $SERVER_IP"
