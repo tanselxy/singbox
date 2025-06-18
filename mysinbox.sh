@@ -1428,7 +1428,7 @@ main() {
   #修改ssh端口为40001
   change_ssh_port
   checkisIpv6
-  excute_fail2ban
+  #excute_fail2ban
   install_singbox
   configure_singbox
   
