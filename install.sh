@@ -622,7 +622,7 @@ deploy_fresh_install() {
     # 网络和安全配置
     #change_ssh_port || log_warn "SSH端口配置可能失败"
     detect_ip_and_setup || error_exit "IP地址检测和配置失败"
-    setup_fail2ban || log_warn "fail2ban配置失败，但不影响主要功能"
+    #setup_fail2ban || log_warn "fail2ban配置失败，但不影响主要功能"
     
     # 软件安装和配置
     install_singbox || error_exit "Sing-Box安装失败"
