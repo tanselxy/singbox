@@ -19,10 +19,6 @@
       {
         "tag": "block",
         "address": "rcode://success"
-      },
-      {
-        "type": "local",
-        "tag": "system-dns"
       }
     ],
     "rules": [
