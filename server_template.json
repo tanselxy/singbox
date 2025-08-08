@@ -6,14 +6,17 @@
   },
   "dns": {
     "servers": [
-      {
+       {
+        "type": "https",
         "tag": "local",
-        "address": "https://1.1.1.1/dns-query",
+        "server": "cloudflare-dns.com",
+        "server_port": 443,
         "detour": "direct"
       },
       {
+        "type": "udp",
         "tag": "local-temp",
-        "address": "2001:4860:4860::8888",
+        "server": "2001:4860:4860::8888",
         "detour": "direct"
       },
       {
