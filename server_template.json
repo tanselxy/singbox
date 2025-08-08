@@ -6,22 +6,25 @@
   },
   "dns": {
     "servers": [
-       {
+      {
         "type": "https",
         "tag": "local",
-        "server": "cloudflare-dns.com",
+        "server": "1.1.1.1",
         "server_port": 443,
         "detour": "direct"
       },
       {
-        "type": "udp",
         "tag": "local-temp",
-        "server": "2001:4860:4860::8888",
-        "detour": "direct"
+        "address": "2001:4860:4860::8888",
+        "detour": "direct-out"
       },
       {
         "tag": "block",
         "address": "rcode://success"
+      },
+      {
+        "tag": "system",
+        "address": "local"
       }
     ],
     "rules": [
@@ -184,7 +187,8 @@
   "outbounds": [
     {
       "type": "direct",
-      "tag": "direct"
+      "tag": "direct",
+      "domain_resolver": "local"
     }
   ],
   "route": {
