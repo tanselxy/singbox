@@ -12,6 +12,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/defaults.conf"
 # 错误处理函数
 # =============================================================================
 
+# 简单的调试日志函数（避免依赖utils.sh）
+log_debug() {
+    # 只在debug模式下输出，默认不输出
+    [[ "${DEBUG:-}" == "1" ]] && echo "[DEBUG] $*" >&2 || true
+}
+
 # 统一的错误退出函数
 error_exit() {
     local message="$1"
@@ -110,9 +116,9 @@ retry_command() {
 # 安全的网络请求函数
 safe_curl() {
     local url="$1"
-    local timeout="${2:-$NETWORK_TIMEOUT}"
-    local max_retries="${3:-$MAX_RETRIES}"
-    local output_file="$4"
+    local timeout="${2:-${NETWORK_TIMEOUT:-10}}"
+    local max_retries="${3:-${MAX_RETRIES:-3}}"
+    local output_file="${4:-}"
     
     # 基本curl参数
     local curl_args=(

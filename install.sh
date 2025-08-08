@@ -969,6 +969,7 @@ safe_curl() {
     local url="$1"
     local timeout="${2:-10}"
     local max_retries="${3:-3}"
+    local output_file="${4:-}"
     
     local curl_args=(
         --max-time "$timeout"
@@ -980,6 +981,11 @@ safe_curl() {
         --location
         --user-agent "Sing-Box-Installer/2.0"
     )
+    
+    # 如果指定了输出文件
+    if [[ -n "$output_file" ]]; then
+        curl_args+=(--output "$output_file")
+    fi
     
     curl_args+=("$url")
     
