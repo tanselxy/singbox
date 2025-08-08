@@ -78,6 +78,8 @@ download_files() {
         "network.sh"
         "server_template.json"
         "utils.sh"
+        "defaults.conf"
+        "error_handler.sh"
     )
     
     local total=${#files[@]}
