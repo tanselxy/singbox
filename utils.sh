@@ -567,10 +567,16 @@ start_http_server() {
     local http_dir="/root"
     local bind_ip="${HTTP_BIND_IP:-0.0.0.0}"  # 默认绑定所有接口
     
-    # 检查端口是否被占用
+    # 检查端口是否被占用，如果有则停止旧服务
     if lsof -i:"$DOWNLOAD_PORT" >/dev/null 2>&1; then
-        log_info "HTTP服务已在端口 $DOWNLOAD_PORT 运行"
-        return 0
+        log_info "检测到端口 $DOWNLOAD_PORT 已被占用，停止旧服务..."
+        local old_pid
+        old_pid=$(lsof -t -i:"$DOWNLOAD_PORT" 2>/dev/null || echo "")
+        if [[ -n "$old_pid" ]]; then
+            kill "$old_pid" 2>/dev/null || true
+            sleep 2
+            log_info "已停止旧HTTP服务 (PID: $old_pid)"
+        fi
     fi
     
     log_info "启动HTTP下载服务 (绑定: $bind_ip:$DOWNLOAD_PORT)..."
