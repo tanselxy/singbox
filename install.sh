@@ -840,8 +840,8 @@ readonly IPV6_CHECK_URLS=(
     "https://ipinfo.io/ip"
 )
 
-# HTTP服务器安全配置
-readonly HTTP_BIND_IP="127.0.0.1"  # 只绑定本地，增强安全性
+# HTTP服务器配置
+readonly HTTP_BIND_IP="0.0.0.0"  # 绑定所有接口，允许外部访问
 readonly HTTP_MAX_CONNECTIONS=10
 
 # 证书配置

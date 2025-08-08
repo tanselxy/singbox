@@ -562,10 +562,10 @@ change_ssh_port() {
 # HTTP服务器函数
 # =============================================================================
 
-# 启动安全的HTTP下载服务
+# 启动HTTP下载服务
 start_http_server() {
     local http_dir="/root"
-    local bind_ip="${HTTP_BIND_IP:-127.0.0.1}"  # 默认只绑定本地
+    local bind_ip="${HTTP_BIND_IP:-0.0.0.0}"  # 默认绑定所有接口
     
     # 检查端口是否被占用
     if lsof -i:"$DOWNLOAD_PORT" >/dev/null 2>&1; then
@@ -576,7 +576,7 @@ start_http_server() {
     log_info "启动HTTP下载服务 (绑定: $bind_ip:$DOWNLOAD_PORT)..."
     cd "$http_dir" || error_exit "无法切换到目录 $http_dir"
     
-    # 启动Python HTTP服务器，只绑定本地接口
+    # 启动Python HTTP服务器
     nohup python3 -m http.server "$DOWNLOAD_PORT" --bind "$bind_ip" >/dev/null 2>&1 &
     local http_pid=$!
     
@@ -584,6 +584,7 @@ start_http_server() {
     sleep 2
     if kill -0 "$http_pid" 2>/dev/null; then
         print_success "HTTP服务已启动 (PID: $http_pid, 端口: $DOWNLOAD_PORT)"
+        log_info "配置文件将在10分钟后自动删除，HTTP服务随之关闭"
         # 保存PID供后续清理
         echo "$http_pid" > "/tmp/singbox_http_$$.pid"
     else
