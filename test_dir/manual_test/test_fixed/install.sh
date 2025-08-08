@@ -22,8 +22,9 @@ readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
-readonly CYAN='\033[0;36m'
 readonly NC='\033[0m'
+
+# 注意：未使用的颜色变量已清理
 
 
 
@@ -48,8 +49,38 @@ PACKAGE_MANAGER=""
 # 工具函数库
 # =============================================================================
 
+# 加载默认配置
+source "$SCRIPT_DIR/defaults.conf" 2>/dev/null || {
+    echo "错误: 无法加载默认配置文件 defaults.conf"
+    exit 1
+}
+
+# 加载错误处理模块
+source "$SCRIPT_DIR/error_handler.sh" 2>/dev/null || {
+    echo "错误: 无法加载错误处理模块 error_handler.sh"
+    exit 1
+}
+
+source "$SCRIPT_DIR/utils.sh" 2>/dev/null || {
+    echo "错误: 无法加载工具函数库 utils.sh"
+    exit 1
+}
+
+source "$SCRIPT_DIR/network.sh" 2>/dev/null || {
+    echo "错误: 无法加载网络函数库 network.sh"
+    exit 1
+}
+
+source "$SCRIPT_DIR/config.sh" 2>/dev/null || {
+    echo "错误: 无法加载配置函数库 config.sh"
+    exit 1
+}
+
+# 初始化错误处理
+init_error_handler
+
 # =============================================================================
-# 依赖文件检查和创建（必须在模块加载之前）
+# 系统检查和初始化
 # =============================================================================
 
 # 检查并创建缺失的文件
@@ -75,49 +106,11 @@ check_dependencies() {
     fi
     
     if [[ ${#missing_files[@]} -gt 0 ]]; then
-        echo "错误: 缺少以下核心依赖文件:"
+        print_error "缺少以下核心依赖文件:"
         printf ' - %s\n' "${missing_files[@]}"
-        echo "请确保所有文件都在同一目录下"
-        exit 1
+        error_exit "请确保所有文件都在同一目录下"
     fi
 }
-
-# 首先检查并创建缺失文件（在严格模式之前）
-check_dependencies
-
-# 加载默认配置
-source "$SCRIPT_DIR/defaults.conf" 2>/dev/null || {
-    echo "错误: 无法加载默认配置文件 defaults.conf"
-    exit 1
-}
-
-source "$SCRIPT_DIR/utils.sh" 2>/dev/null || {
-    echo "错误: 无法加载工具函数库 utils.sh"
-    exit 1
-}
-
-source "$SCRIPT_DIR/network.sh" 2>/dev/null || {
-    echo "错误: 无法加载网络函数库 network.sh"
-    exit 1
-}
-
-source "$SCRIPT_DIR/config.sh" 2>/dev/null || {
-    echo "错误: 无法加载配置函数库 config.sh"
-    exit 1
-}
-
-# 最后加载错误处理模块（因为它会启用严格模式）
-source "$SCRIPT_DIR/error_handler.sh" 2>/dev/null || {
-    echo "错误: 无法加载错误处理模块 error_handler.sh"
-    exit 1
-}
-
-# 初始化错误处理
-init_error_handler
-
-# =============================================================================
-# 系统检查和初始化
-# =============================================================================
 
 # 显示脚本信息
 # Define Colors
@@ -1046,16 +1039,14 @@ check_network_connectivity() {
 
 # 初始化错误处理模块
 init_error_handler() {
-    # 设置错误陷阱 (不使用 -u 选项避免未绑定变量问题)
-    set -eo pipefail
+    # 设置错误陷阱
+    set -euo pipefail
     
     # 设置EXIT陷阱
     trap cleanup_on_exit EXIT
     
     # 设置错误陷阱
     trap 'error_exit "脚本在第 $LINENO 行出错" $?' ERR
-    
-    echo "[INFO] 错误处理模块已初始化"
 }
 
 # 清理退出函数

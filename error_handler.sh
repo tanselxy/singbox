@@ -318,8 +318,8 @@ check_optional_commands() {
 
 # 初始化错误处理模块
 init_error_handler() {
-    # 设置错误陷阱
-    set -euo pipefail
+    # 设置错误陷阱 (不使用 -u 选项避免未绑定变量问题)
+    set -eo pipefail
     
     # 设置EXIT陷阱
     trap cleanup_on_exit EXIT
@@ -327,7 +327,7 @@ init_error_handler() {
     # 设置错误陷阱
     trap 'error_exit "脚本在第 $LINENO 行出错" $? $LINENO "${FUNCNAME[0]}"' ERR
     
-    log_debug "错误处理模块已初始化"
+    echo "[INFO] 错误处理模块已初始化"
 }
 
 # 清理退出函数
