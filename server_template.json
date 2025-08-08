@@ -188,7 +188,7 @@
     }
   ],
   "route": {
-    "default_domain_resolver": "system-dns",
+    "default_domain_resolver": "local",
     "rules": [
       {
         "rule_set": ["private", "cn"],
