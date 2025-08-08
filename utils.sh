@@ -567,13 +567,15 @@ start_http_server() {
     local http_dir="/root"
     local port="${DOWNLOAD_PORT:-14567}"
     
-    # 检查端口是否被占用
+    # 检查端口是否被占用，如果有则先杀掉
     local pid
     pid=$(lsof -t -i :$port 2>/dev/null || echo "")
     
     if [[ -n "$pid" ]]; then
-        log_info "HTTP服务已运行，监听端口 $port (进程 $pid)"
-        return 0
+        log_info "检测到端口 $port 已被占用 (进程 $pid)，停止旧服务..."
+        kill "$pid" 2>/dev/null || true
+        sleep 2
+        log_info "已停止旧HTTP服务"
     fi
     
     log_info "启动HTTP下载服务 (端口: $port)..."

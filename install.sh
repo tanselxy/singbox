@@ -467,13 +467,42 @@ enable_and_start_service() {
         # 显示服务状态
         log_info "服务状态："
         
-        systemctl status sing-box --no-pager -l | head -20
+        # 只显示简要状态，详细信息记录到日志
+        systemctl is-active sing-box >/dev/null && print_success "✅ 服务运行正常" || print_error "❌ 服务状态异常"
+        
+        # 详细状态信息写入日志文件
+        {
+            echo "=== Sing-Box 服务启动成功详细状态 ==="
+            echo "时间: $(date)"
+            systemctl status sing-box --no-pager -l 2>&1
+            echo "============================================="
+        } >> "$LOG_FILE" 2>&1
     else
         log_error "Sing-Box 服务启动失败"
-        log_error "服务状态："
-        systemctl status sing-box --no-pager -l
-        log_error "服务日志："
-        journalctl -u sing-box --no-pager -l | tail -20
+        log_error "正在收集诊断信息到日志文件..."
+        
+        # 将详细的诊断信息写入日志文件，不显示在控制台
+        {
+            echo "=== Sing-Box 服务启动失败诊断信息 ==="
+            echo "时间: $(date)"
+            echo ""
+            echo "=== 服务状态 ==="
+            systemctl status sing-box --no-pager -l 2>&1 || echo "无法获取服务状态"
+            echo ""
+            echo "=== 最近20条服务日志 ==="
+            journalctl -u sing-box --no-pager -l 2>&1 | tail -20 || echo "无法获取服务日志"
+            echo ""
+            echo "=== 配置文件语法检查 ==="
+            sing-box check -c "$CONFIG_DIR/config.json" 2>&1 || echo "配置文件检查失败"
+            echo ""
+            echo "=== 系统资源状态 ==="
+            df -h / 2>&1 || echo "磁盘空间检查失败"
+            free -h 2>&1 || echo "内存状态检查失败"
+            echo "==============================================="
+        } >> "$LOG_FILE" 2>&1
+        
+        log_error "详细诊断信息已记录到: $LOG_FILE"
+        log_error "请检查日志文件以获取失败原因"
         error_exit "Sing-Box 服务启动失败"
     fi
 }
