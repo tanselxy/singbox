@@ -13,24 +13,45 @@
 detect_ip_and_setup() {
     log_info "检测服务器IP地址..."
     
-    # 尝试获取IPv4地址
-    SERVER_IP=$(curl -4 -s https://api64.ipify.org ||curl -4 -s --max-time 10 ifconfig.me || curl -4 -s --max-time 10 ipinfo.io/ip || echo "")
+    # 使用多源检测IPv4地址
+    local ipv4_result
+    for url in "${IPV4_CHECK_URLS[@]}"; do
+        log_debug "尝试IPv4检测: $url"
+        if ipv4_result=$(safe_curl "$url" "$NETWORK_TIMEOUT" 1); then
+            if [[ "$ipv4_result" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+                SERVER_IP="$ipv4_result"
+                break
+            fi
+        fi
+    done
     
     if [[ -n "$SERVER_IP" ]]; then
         log_info "获取到IPv4地址: $SERVER_IP"
         
         # 检查是否为Cloudflare
         local org
-        org=$(curl -s --max-time 10 https://ipinfo.io/org 2>/dev/null || echo "")
-        if echo "$org" | grep -qi "cloudflare"; then
-            setup_cloudflare_domain
+        if org=$(safe_curl "https://ipinfo.io/org" "$NETWORK_TIMEOUT" 1); then
+            if echo "$org" | grep -qi "cloudflare"; then
+                setup_cloudflare_domain
+            fi
         fi
     else
         log_info "无法获取IPv4地址，尝试IPv6..."
-        SERVER_IP=$(curl -6 -s --max-time 10 ifconfig.me || curl -6 -s --max-time 10 ipinfo.io/ip || echo "")
+        
+        # 使用多源检测IPv6地址
+        local ipv6_result
+        for url in "${IPV6_CHECK_URLS[@]}"; do
+            log_debug "尝试IPv6检测: $url"
+            if ipv6_result=$(curl -6 -s --max-time "$NETWORK_TIMEOUT" "$url" 2>/dev/null); then
+                if [[ "$ipv6_result" =~ ^[0-9a-fA-F:]+$ ]]; then
+                    SERVER_IP="$ipv6_result"
+                    IS_IPV6=true
+                    break
+                fi
+            fi
+        done
         
         if [[ -n "$SERVER_IP" ]]; then
-            IS_IPV6=true
             log_info "获取到IPv6地址: $SERVER_IP"
             setup_ipv6_domain
             install_warp
@@ -121,9 +142,9 @@ verify_certificates() {
 install_warp() {
     log_info "安装 WARP..."
     
-    # 下载wgcf
-    if ! curl -H 'Cache-Control: no-cache' -o "$TEMP_DIR/wgcf" \
-        "https://raw.githubusercontent.com/tanselxy/singbox/main/wgcf_2.2.15_linux_amd64"; then
+    # 下载wgcf使用改进的下载函数
+    local wgcf_url="https://raw.githubusercontent.com/tanselxy/singbox/main/wgcf_2.2.15_linux_amd64"
+    if ! download_file "$wgcf_url" "$TEMP_DIR/wgcf" "$DOWNLOAD_TIMEOUT"; then
         error_exit "下载 wgcf 失败"
     fi
     
@@ -223,18 +244,13 @@ select_domain() {
     log_info "根据地区选择推荐域名..."
     
     local country_code
-    country_code=$(curl -s --max-time 10 https://ipapi.co/country/ 2>/dev/null || echo "US")
+    if ! country_code=$(safe_curl "https://ipapi.co/country/" "$NETWORK_TIMEOUT" 1); then
+        log_warn "无法检测地区，使用默认地区 US"
+        country_code="US"
+    fi
     
-    case "$country_code" in
-        TW) SERVER="www.apple.com" ;;
-        NG) SERVER="unn.edu.ng" ;;
-        JP) SERVER="www.tms-e.co.jp" ;;
-        US) SERVER="www.thewaltdisneycompany.com" ;;
-        NL) SERVER="nl.servutech.com" ;;
-        DE) SERVER="www.mediamarkt.de" ;;
-        HK) SERVER="www.apple.com" ;;
-        *) SERVER="www.apple.com" ;;
-    esac
+    # 使用关联数组选择域名
+    SERVER="${DOMAIN_BY_COUNTRY[$country_code]:-${DOMAIN_BY_COUNTRY[DEFAULT]}}"
     
     print_info "当前地区: $country_code，推荐域名: $SERVER"
     
@@ -354,7 +370,7 @@ generate_ipv6_link() {
     # 检查域名是否被微信屏蔽
     local url="https://cgi.urlsec.qq.com/index.php?m=url&a=validUrl&url=https://$DOMAIN_NAME"
     local is_use
-    is_use=$(curl -s --max-time 5 "$url" 2>/dev/null || echo "")
+    is_use=$(safe_curl "$url" 5 1 || echo "")
     
     if echo "$is_use" | grep -q '"evil_type":0' 2>/dev/null; then
         log_info "域名通过微信检测"

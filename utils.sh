@@ -5,15 +5,71 @@
 # 包含日志、颜色输出、密码生成、端口检测等通用工具函数
 # =============================================================================
 
+# 注意：默认配置和错误处理已在主脚本中加载
+
 # =============================================================================
-# 日志和输出函数
+# 增强的日志系统
 # =============================================================================
 
-# 日志函数
+# 结构化日志函数
 log() {
     local level="$1"
+    local level_num
+    local color
     shift
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $*" | tee -a "$LOG_FILE" 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $*"
+    
+    # 确定日志级别数值和颜色
+    case "$level" in
+        "ERROR") level_num=$LOG_LEVEL_ERROR; color="$RED" ;;
+        "WARN")  level_num=$LOG_LEVEL_WARN;  color="$YELLOW" ;;
+        "INFO")  level_num=$LOG_LEVEL_INFO;  color="$GREEN" ;;
+        "DEBUG") level_num=$LOG_LEVEL_DEBUG; color="$BLUE" ;;
+        *) level_num=$LOG_LEVEL_INFO; color="$NC" ;;
+    esac
+    
+    # 检查是否需要输出此级别的日志
+    if [[ $level_num -gt ${CURRENT_LOG_LEVEL:-$LOG_LEVEL_INFO} ]]; then
+        return 0
+    fi
+    
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local message="[$timestamp] [$level] $*"
+    
+    # 输出到控制台（带颜色）
+    echo -e "${color}${message}${NC}"
+    
+    # 输出到日志文件（不带颜色）
+    if [[ -n "${LOG_FILE:-}" ]]; then
+        echo "$message" >> "$LOG_FILE" 2>/dev/null || true
+        
+        # 日志轮转
+        rotate_log_if_needed
+    fi
+}
+
+# 日志轮转函数
+rotate_log_if_needed() {
+    if [[ ! -f "$LOG_FILE" ]]; then
+        return 0
+    fi
+    
+    local file_size
+    file_size=$(stat -f%z "$LOG_FILE" 2>/dev/null || stat -c%s "$LOG_FILE" 2>/dev/null || echo "0")
+    local max_size=$((10 * 1024 * 1024))  # 10MB
+    
+    if [[ $file_size -gt $max_size ]]; then
+        # 备份当前日志
+        local backup_file="${LOG_FILE}.$(date +%Y%m%d_%H%M%S)"
+        mv "$LOG_FILE" "$backup_file"
+        
+        # 压缩旧日志
+        gzip "$backup_file" 2>/dev/null || true
+        
+        # 清理过期日志
+        find "$(dirname "$LOG_FILE")" -name "$(basename "$LOG_FILE").*.gz" -mtime +7 -delete 2>/dev/null || true
+        
+        log_info "日志已轮转: $backup_file"
+    fi
 }
 
 log_info() { log "INFO" "$@"; }
@@ -21,18 +77,7 @@ log_warn() { log "WARN" "$@"; }
 log_error() { log "ERROR" "$@"; }
 log_debug() { log "DEBUG" "$@"; }
 
-# 错误处理
-error_exit() {
-    log_error "$1"
-    cleanup_on_exit
-    exit 1
-}
-
-# 清理函数
-cleanup_on_exit() {
-    log_info "执行清理操作..."
-    [[ -d "$TEMP_DIR" ]] && rm -rf "$TEMP_DIR"
-}
+# 注意：错误处理函数已移动到 error_handler.sh
 
 # 颜色输出函数
 print_colored() {
@@ -163,7 +208,7 @@ generate_strong_password() {
     
     # 方法3: 使用系统时间和PID的组合
     local timestamp=$(date +%s%N 2>/dev/null || date +%s)
-    local pid=$
+    local pid=$$
     local seed="${timestamp}${pid}"
     
     # 简单的伪随机生成
@@ -253,7 +298,7 @@ generate_random_string() {
     
     # 方法3: 使用时间戳和进程ID的组合
     local timestamp=$(date +%s 2>/dev/null || echo "123456")
-    local pid=$
+    local pid=$$
     local combined="${timestamp}${pid}"
     local result
     result=$(echo "$combined" | md5sum 2>/dev/null | tr -dc 'a-zA-Z' | head -c "$length" 2>/dev/null)
@@ -517,9 +562,10 @@ change_ssh_port() {
 # HTTP服务器函数
 # =============================================================================
 
-# 启动HTTP下载服务
+# 启动安全的HTTP下载服务
 start_http_server() {
     local http_dir="/root"
+    local bind_ip="${HTTP_BIND_IP:-127.0.0.1}"  # 默认只绑定本地
     
     # 检查端口是否被占用
     if lsof -i:"$DOWNLOAD_PORT" >/dev/null 2>&1; then
@@ -527,13 +573,23 @@ start_http_server() {
         return 0
     fi
     
-    log_info "启动HTTP下载服务..."
+    log_info "启动HTTP下载服务 (绑定: $bind_ip:$DOWNLOAD_PORT)..."
     cd "$http_dir" || error_exit "无法切换到目录 $http_dir"
     
-    # 启动Python HTTP服务器
-    nohup python3 -m http.server "$DOWNLOAD_PORT" --bind 0.0.0.0 >/dev/null 2>&1 &
+    # 启动Python HTTP服务器，只绑定本地接口
+    nohup python3 -m http.server "$DOWNLOAD_PORT" --bind "$bind_ip" >/dev/null 2>&1 &
+    local http_pid=$!
     
-    print_success "HTTP服务已启动，端口: $DOWNLOAD_PORT"
+    # 等待服务启动
+    sleep 2
+    if kill -0 "$http_pid" 2>/dev/null; then
+        print_success "HTTP服务已启动 (PID: $http_pid, 端口: $DOWNLOAD_PORT)"
+        # 保存PID供后续清理
+        echo "$http_pid" > "/tmp/singbox_http_$$.pid"
+    else
+        log_error "HTTP服务启动失败"
+        return 1
+    fi
 }
 
 # 提供下载链接

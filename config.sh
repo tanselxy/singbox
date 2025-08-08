@@ -419,7 +419,7 @@ export_config() {
     log_info "导出配置到: $export_file"
     
     # 创建临时目录
-    local temp_export_dir="/tmp/singbox_export_$"
+    local temp_export_dir="/tmp/singbox_export_$$"
     mkdir -p "$temp_export_dir"
     
     # 复制配置文件

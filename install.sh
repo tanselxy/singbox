@@ -24,16 +24,7 @@ readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
 readonly NC='\033[0m'
 
-BLACK='\033[0;30m'
-
-
-
-
-MAGENTA='\033[0;35m'
-CYAN='\033[0;36m'
-WHITE='\033[0;37m'
-BOLD_WHITE='\033[1;37m'
-PURPLE='\033[0;35m'
+# 注意：未使用的颜色变量已清理
 
 
 
@@ -58,6 +49,18 @@ PACKAGE_MANAGER=""
 # 工具函数库
 # =============================================================================
 
+# 加载默认配置
+source "$SCRIPT_DIR/defaults.conf" 2>/dev/null || {
+    echo "错误: 无法加载默认配置文件 defaults.conf"
+    exit 1
+}
+
+# 加载错误处理模块
+source "$SCRIPT_DIR/error_handler.sh" 2>/dev/null || {
+    echo "错误: 无法加载错误处理模块 error_handler.sh"
+    exit 1
+}
+
 source "$SCRIPT_DIR/utils.sh" 2>/dev/null || {
     echo "错误: 无法加载工具函数库 utils.sh"
     exit 1
@@ -72,6 +75,9 @@ source "$SCRIPT_DIR/config.sh" 2>/dev/null || {
     echo "错误: 无法加载配置函数库 config.sh"
     exit 1
 }
+
+# 初始化错误处理
+init_error_handler
 
 # =============================================================================
 # 系统检查和初始化
@@ -105,93 +111,22 @@ check_dependencies() {
 # 这里为了独立性和精确控制单个字符颜色，我将直接使用 echo -e。
 
 
+# 简化的横幅显示函数
 show_banner() {
-  
-# 清屏
-clear
-
-# 框线字符
-    TL="╭" # Top-left corner - 左上角
-    TR="╮" # Top-right corner - 右上角
-    BL="╰" # Bottom-left corner - 左下角
-    BR="╯" # Bottom-right corner - 右下角
-    HZ="─" # Horizontal line - 横线
-    VT="│" # Vertical line - 竖线
-
-    # 准备要显示的内容
-    # 第一行：链接
-    # 原始格式："    ${YELLOW}https://my.racknerd.com/aff.php?aff=10790${NC}║"
-    # 前导空格数: 4
-    # URL+║ 文本: "https://my.racknerd.com/aff.php?aff=10790║" (长度 44)
-    # 整行有效内容显示长度 (包括前导空格和结尾的║): 4 + 44 = 48
-    line1_leading_spaces_count=4
-    line1_content_text="https://my.racknerd.com/aff.php?aff=10790&pid=912" # 不包括║，方便添加颜色
-    line1_trailing_char=""
-    line1_effective_display_width=$((line1_leading_spaces_count + ${#line1_content_text} + ${#line1_trailing_char}))
-
-
-    # 第二行：中文说明
-    # 原始格式："            ${GREEN}年付仅需10美元${NC}"
-    # 前导空格数: 12
-    # 中文+数字文本: "年付仅需10美元"
-    #   假设中文每个字占2个显示单元，数字/字母占1个。
-    #   年(2)付(2)仅(2)需(2)1(1)0(1)美(2)元(2) = 14 个显示单元宽度
-    # 整行有效内容显示长度 (包括前导空格): 12 + 14 = 26
-    line2_leading_spaces_count=12
-    line2_content_text="年付仅需10美元"
-    line2_effective_display_width=$((line2_leading_spaces_count + 14)) # 14 是 "年付仅需10美元" 的估算显示宽度
-
-    # 决定框内部的宽度，以最长的那一行内容为基准，再加一点点缀空间
-    content_width=$line1_effective_display_width
-    if (( line2_effective_display_width > content_width )); then
-        content_width=$line2_effective_display_width
-    fi
-    # 可以稍微增加一点宽度，让内容不至于太挤
-    # content_width=$((content_width + 2)) # 例如，左右各增加1个空格的内边距
-    # 或者，我们可以设定一个固定的期望宽度，比如50或52，然后计算两端填充
-    # 这里我们使用一个固定的内部宽度，以使得两行文本右侧对齐（通过填充空格）
-    fixed_content_width=50 # 您可以调整这个值
-
-    # 打印上边框
-    printf "${CYAN}%s" "$TL"
-    for ((i=0; i<fixed_content_width; i++)); do printf "%s" "$HZ"; done
-    printf "%s${NC}\n" "$TR"
-
-    # 打印第一行内容 (链接)
-    printf "${CYAN}%s${NC}" "$VT"
-    # 打印前导空格
-    for ((i=0; i<line1_leading_spaces_count; i++)); do printf " "; done
-    # 打印带颜色的链接和结尾字符
-    printf "${YELLOW}%s${NC}%s" "$line1_content_text" "$line1_trailing_char"
-    # 计算并打印末尾填充空格
-    line1_trailing_padding_count=$((fixed_content_width - line1_effective_display_width))
-    for ((i=0; i<line1_trailing_padding_count; i++)); do printf " "; done
-    printf "${CYAN}%s${NC}\n" "$VT"
-
-    # 打印框内空行（用于分隔）
-    printf "${CYAN}%s${NC}" "$VT"
-    for ((i=0; i<fixed_content_width; i++)); do printf " "; done
-    printf "${CYAN}%s${NC}\n" "$VT"
-
-    # 打印第二行内容 (中文说明)
-    printf "${CYAN}%s${NC}" "$VT"
-    # 打印前导空格
-    for ((i=0; i<line2_leading_spaces_count; i++)); do printf " "; done
-    # 打印带颜色的中文说明
-    printf "${GREEN}%s${NC}" "$line2_content_text"
-    # 计算并打印末尾填充空格
-    line2_trailing_padding_count=$((fixed_content_width - line2_effective_display_width))
-    for ((i=0; i<line2_trailing_padding_count; i++)); do printf " "; done
-    printf "${CYAN}%s${NC}\n" "$VT"
-
-    # 打印下边框
-    printf "${CYAN}%s" "$BL"
-    for ((i=0; i<fixed_content_width; i++)); do printf "%s" "$HZ"; done
-    printf "%s${NC}\n" "$BR"
-
-    # 您原来版本中信息块之后的空行，如果需要，可以在调用此函数后再用 echo 添加
+    clear
     
-
+    echo ""
+    print_colored "$CYAN" "╭──────────────────────────────────────────────────╮"
+    print_colored "$CYAN" "│    ${YELLOW}https://my.racknerd.com/aff.php?aff=10790&pid=912${CYAN} │"
+    print_colored "$CYAN" "│                                                  │"
+    print_colored "$CYAN" "│            ${GREEN}年付仅需10美元${CYAN}                    │"
+    print_colored "$CYAN" "╰──────────────────────────────────────────────────╯"
+    echo ""
+    
+    print_colored "$BLUE" "========== Sing-Box 自动部署脚本 v$SCRIPT_VERSION =========="
+    print_colored "$GREEN" "作者: 优化版本 | 功能: 一键部署多协议代理服务"
+    print_colored "$BLUE" "================================================"
+    echo ""
 }
 
 
@@ -224,19 +159,19 @@ initialize() {
         return 1
     }
     
-    # 获取可用端口
+    # 获取可用端口（使用配置文件中的范围）
     log_info "分配可用端口..."
-    VLESS_PORT=$(get_available_port 20000 20010 2>>"$LOG_FILE") || {
+    VLESS_PORT=$(get_available_port "$DEFAULT_VLESS_PORT_MIN" "$DEFAULT_VLESS_PORT_MAX" 2>>"$LOG_FILE") || {
         log_error "获取VLESS端口失败"
         return 1
     }
     
-    SS_PORT=$(get_available_port 31000 31010 2>>"$LOG_FILE") || {
+    SS_PORT=$(get_available_port "$DEFAULT_SS_PORT_MIN" "$DEFAULT_SS_PORT_MAX" 2>>"$LOG_FILE") || {
         log_error "获取SS端口失败"  
         return 1
     }
     
-    HYSTERIA_PORT=$(get_available_port 50000 50010 2>>"$LOG_FILE") || {
+    HYSTERIA_PORT=$(get_available_port "$DEFAULT_HYSTERIA_PORT_MIN" "$DEFAULT_HYSTERIA_PORT_MAX" 2>>"$LOG_FILE") || {
         log_error "获取Hysteria端口失败"
         return 1
     }
@@ -427,7 +362,7 @@ EOF
     cd / && rm -rf "$TEMP_DIR/sing-box"* 2>/dev/null || true
 }
 
-# 安装自签证书
+# 安装自签证书（增强安全性）
 install_self_signed_cert() {
     log_info "生成自签证书..."
     
@@ -435,13 +370,31 @@ install_self_signed_cert() {
     
     local private_key="$CERT_DIR/private.key"
     local cert_file="$CERT_DIR/cert.pem"
-    local cn="bing.com"
+    local cn="${CERT_CN:-bing.com}"
     
-    openssl ecparam -genkey -name prime256v1 -out "$private_key"
-    openssl req -new -x509 -days 36500 -key "$private_key" -out "$cert_file" \
-        -subj "/CN=$cn" 2>/dev/null
+    # 生成私钥
+    if ! openssl ecparam -genkey -name prime256v1 -out "$private_key" 2>/dev/null; then
+        error_exit "生成私钥失败"
+    fi
     
-    print_success "自签证书生成完成"
+    # 生成证书
+    if ! openssl req -new -x509 -days "$CERT_VALIDITY_DAYS" -key "$private_key" -out "$cert_file" \
+        -subj "/CN=$cn" 2>/dev/null; then
+        error_exit "生成证书失败"
+    fi
+    
+    # 设置安全的文件权限
+    chmod "$DEFAULT_KEY_PERMS" "$private_key"
+    chmod "$DEFAULT_CERT_PERMS" "$cert_file"
+    chown root:root "$private_key" "$cert_file"
+    
+    # 验证证书
+    if openssl x509 -in "$cert_file" -text -noout >/dev/null 2>&1; then
+        print_success "自签证书生成完成并验证通过"
+        log_info "证书有效期: $CERT_VALIDITY_DAYS 天"
+    else
+        error_exit "证书验证失败"
+    fi
 }
 
 # =============================================================================
@@ -474,8 +427,9 @@ enable_and_start_service() {
     
     log_info "配置文件语法验证通过"
     
-    # 设置文件权限
-    chmod 644 "$CONFIG_DIR/config.json"
+    # 设置安全的文件权限
+    chmod 600 "$CONFIG_DIR/config.json"
+    chown root:root "$CONFIG_DIR/config.json"
     
     # 启用并启动服务
     log_info "启用服务..."
@@ -788,8 +742,7 @@ main() {
     done
 }
 
-# 错误处理
-trap cleanup_on_exit EXIT
+# 注意：错误处理已移至 error_handler.sh 模块
 
 # 运行主函数
 main "$@"
