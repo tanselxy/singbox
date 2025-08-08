@@ -19,6 +19,10 @@
       {
         "tag": "block",
         "address": "rcode://success"
+      },
+      {
+        "type": "local",
+        "tag": "system-dns"
       }
     ],
     "rules": [
@@ -185,6 +189,7 @@
     }
   ],
   "route": {
+    "default_domain_resolver": "system-dns",
     "rules": [
       {
         "rule_set": ["private", "cn"],
