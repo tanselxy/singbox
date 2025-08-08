@@ -582,19 +582,70 @@ start_http_server() {
     log_info "启动HTTP下载服务 (绑定: $bind_ip:$DOWNLOAD_PORT)..."
     cd "$http_dir" || error_exit "无法切换到目录 $http_dir"
     
-    # 启动Python HTTP服务器
-    nohup python3 -m http.server "$DOWNLOAD_PORT" --bind "$bind_ip" >/dev/null 2>&1 &
-    local http_pid=$!
+    # 等待端口完全释放
+    sleep 3
     
-    # 等待服务启动
-    sleep 2
-    if kill -0 "$http_pid" 2>/dev/null; then
+    # 启动Python HTTP服务器 - 多种方法兼容
+    local http_pid=""
+    local start_success=false
+    
+    # 方法1: 尝试使用 --bind 参数
+    log_debug "尝试方法1: python3 -m http.server $DOWNLOAD_PORT --bind $bind_ip"
+    nohup python3 -m http.server "$DOWNLOAD_PORT" --bind "$bind_ip" >/dev/null 2>&1 &
+    http_pid=$!
+    sleep 3
+    
+    if kill -0 "$http_pid" 2>/dev/null && lsof -i:"$DOWNLOAD_PORT" >/dev/null 2>&1; then
+        start_success=true
+        log_debug "方法1成功"
+    else
+        log_warn "方法1失败，尝试方法2"
+        kill "$http_pid" 2>/dev/null || true
+        
+        # 方法2: 不使用 --bind 参数 (适用于旧版Python)
+        log_debug "尝试方法2: python3 -m http.server $DOWNLOAD_PORT"
+        nohup python3 -m http.server "$DOWNLOAD_PORT" >/dev/null 2>&1 &
+        http_pid=$!
+        sleep 3
+        
+        if kill -0 "$http_pid" 2>/dev/null && lsof -i:"$DOWNLOAD_PORT" >/dev/null 2>&1; then
+            start_success=true
+            log_debug "方法2成功"
+        else
+            log_warn "方法2失败，尝试方法3"
+            kill "$http_pid" 2>/dev/null || true
+            
+            # 方法3: 使用 python 而不是 python3
+            if command -v python >/dev/null 2>&1; then
+                log_debug "尝试方法3: python -m http.server $DOWNLOAD_PORT"
+                nohup python -m http.server "$DOWNLOAD_PORT" >/dev/null 2>&1 &
+                http_pid=$!
+                sleep 3
+                
+                if kill -0 "$http_pid" 2>/dev/null && lsof -i:"$DOWNLOAD_PORT" >/dev/null 2>&1; then
+                    start_success=true
+                    log_debug "方法3成功"
+                else
+                    kill "$http_pid" 2>/dev/null || true
+                fi
+            fi
+        fi
+    fi
+    
+    if [[ "$start_success" == true ]]; then
         print_success "HTTP服务已启动 (PID: $http_pid, 端口: $DOWNLOAD_PORT)"
+        
+        # 检查实际绑定地址
+        local bind_info
+        bind_info=$(lsof -i:"$DOWNLOAD_PORT" | grep python | awk '{print $9}' || echo "未知")
+        log_info "服务绑定地址: $bind_info"
         log_info "配置文件将在10分钟后自动删除，HTTP服务随之关闭"
+        
         # 保存PID供后续清理
         echo "$http_pid" > "/tmp/singbox_http_$$.pid"
     else
-        log_error "HTTP服务启动失败"
+        log_error "HTTP服务启动失败 - 所有方法都尝试过了"
+        log_error "可能原因: 1) Python版本不兼容 2) 端口被其他程序占用 3) 权限问题"
         return 1
     fi
 }
