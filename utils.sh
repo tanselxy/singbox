@@ -128,10 +128,37 @@ check_system() {
 
 # 检查网络连接
 check_network() {
-    if ! ping -c 1 -W 5 8.8.8.8 >/dev/null 2>&1; then
-        error_exit "网络连接检查失败"
-    fi
-    log_info "网络连接正常"
+    # IPv4测试地址
+    local ipv4_urls=(
+        "8.8.8.8"
+        "1.1.1.1"
+        "114.114.114.114"
+    )
+    
+    # IPv6测试地址
+    local ipv6_urls=(
+        "2001:4860:4860::8888"  # Google DNS IPv6
+        "2606:4700:4700::1111"  # Cloudflare DNS IPv6
+        "2400:3200::1"          # 阿里DNS IPv6
+    )
+    
+    # 先测试IPv4连接
+    for url in "${ipv4_urls[@]}"; do
+        if ping -c 1 -W 5 "$url" >/dev/null 2>&1; then
+            log_info "网络连接正常 (IPv4测试地址: $url)"
+            return 0
+        fi
+    done
+    
+    # 如果IPv4失败，测试IPv6连接
+    for url in "${ipv6_urls[@]}"; do
+        if ping6 -c 1 -W 5 "$url" >/dev/null 2>&1; then
+            log_info "网络连接正常 (IPv6测试地址: $url)"
+            return 0
+        fi
+    done
+    
+    error_exit "网络连接检查失败 (IPv4和IPv6都不可达)"
 }
 
 # 检查和启动systemd-resolved
@@ -613,11 +640,15 @@ start_http_server() {
 
 # 提供下载链接
 provide_download_link() {
+    # 获取最佳IP地址
+    local optimal_ip
+    optimal_ip=$(get_optimal_ip)
+    
     echo ""
     print_colored "$RED" "=================== 下载链接 ==================="
     echo ""
     echo "配置文件下载地址:"
-    echo "http://$SERVER_IP:$DOWNLOAD_PORT/singbox_racknerd.yaml"
+    echo "http://$optimal_ip:$DOWNLOAD_PORT/singbox_racknerd.yaml"
     echo ""
     print_colored "$RED" "=============================================="
     echo ""
@@ -668,11 +699,15 @@ generate_qr_codes() {
     
     log_info "生成二维码..."
     
+    # 获取最佳IP地址
+    local optimal_ip
+    optimal_ip=$(get_optimal_ip)
+    
     # 生成主要协议的二维码
-    local reality_link="vless://${UUID}@${SERVER_IP}:${VLESS_PORT}?security=reality&flow=xtls-rprx-vision&type=tcp&sni=${SERVER}&fp=chrome&pbk=Y_-yCHC3Qi-Kz6OWpueQckAJSQuGEKffwWp8MlFgwTs&sid=0123456789abcded&encryption=none#Reality"
-    local hy2_link="hysteria2://${HYSTERIA_PASSWORD}@${SERVER_IP}:${HYSTERIA_PORT}?insecure=1&alpn=h3&sni=bing.com#Hysteria2"
-    local trojan_link="trojan://${HYSTERIA_PASSWORD}@${SERVER_IP}:63333?sni=bing.com&type=ws&path=%2Ftrojan&host=bing.com&allowInsecure=1&udp=true&alpn=http%2F1.1#Trojan"
-    local tuic_link="tuic://${UUID}:@${SERVER_IP}:61555?alpn=h3&allow_insecure=1&congestion_control=bbr#TUIC"
+    local reality_link="vless://${UUID}@${optimal_ip}:${VLESS_PORT}?security=reality&flow=xtls-rprx-vision&type=tcp&sni=${SERVER}&fp=chrome&pbk=Y_-yCHC3Qi-Kz6OWpueQckAJSQuGEKffwWp8MlFgwTs&sid=0123456789abcded&encryption=none#Reality"
+    local hy2_link="hysteria2://${HYSTERIA_PASSWORD}@${optimal_ip}:${HYSTERIA_PORT}?insecure=1&alpn=h3&sni=bing.com#Hysteria2"
+    local trojan_link="trojan://${HYSTERIA_PASSWORD}@${optimal_ip}:63333?sni=bing.com&type=ws&path=%2Ftrojan&host=bing.com&allowInsecure=1&udp=true&alpn=http%2F1.1#Trojan"
+    local tuic_link="tuic://${UUID}:@${optimal_ip}:61555?alpn=h3&allow_insecure=1&congestion_control=bbr#TUIC"
     
     echo ""
     print_colored "$BLUE" "=============== 二维码生成 ==============="

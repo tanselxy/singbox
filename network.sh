@@ -68,11 +68,45 @@ setup_cloudflare_domain() {
         if [[ "$DOMAIN_NAME" =~ ^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]]; then
             CERT_FILE="/etc/ssl/cert/certCDN.pem"
             KEY_FILE="/etc/ssl/cert/privateCDN.key"
+            
+            # 验证域名解析并申请证书
+            verify_domain_cloudflare
             break
         else
             print_error "输入的不是有效的域名格式，请重新输入"
         fi
     done
+}
+
+# 验证Cloudflare域名解析
+verify_domain_cloudflare() {
+    log_info "验证Cloudflare域名解析..."
+    
+    # 安装DNS工具
+    case "$PACKAGE_MANAGER" in
+        "apt")
+            apt-get update >/dev/null 2>&1
+            apt-get install -y dnsutils >/dev/null 2>&1
+            ;;
+        "yum"|"dnf")
+            $PACKAGE_MANAGER install -y bind-utils >/dev/null 2>&1
+            ;;
+    esac
+    
+    local domain_ip
+    domain_ip=$(dig A "$DOMAIN_NAME" +short | head -n1)
+    
+    print_info "本机 IP 地址: $SERVER_IP"
+    print_info "域名解析 IP: $domain_ip"
+    
+    if [[ "$SERVER_IP" == "$domain_ip" ]]; then
+        print_success "域名解析地址与本机 IP 一致"
+        verify_certificates
+    else
+        log_warn "域名解析地址与本机 IP 不一致，这在Cloudflare代理模式下是正常的"
+        print_info "继续申请证书..."
+        verify_certificates
+    fi
 }
 
 # 设置IPv6域名
@@ -125,12 +159,223 @@ verify_certificates() {
     mkdir -p "$(dirname "$CERT_FILE")"
     
     if [[ -f "$CERT_FILE" && -f "$KEY_FILE" ]]; then
-        print_success "证书文件和私钥文件已存在"
+        # 检查证书是否过期
+        if check_certificate_expiry "$CERT_FILE"; then
+            print_success "证书文件和私钥文件已存在且有效"
+            return 0
+        else
+            log_warn "证书已过期或即将过期，将重新申请"
+        fi
+    fi
+    
+    # 如果证书不存在或已过期，自动申请证书
+    print_info "开始为域名 $DOMAIN_NAME 申请 SSL 证书..."
+    request_ssl_certificate
+}
+
+# =============================================================================
+# SSL 证书管理功能
+# =============================================================================
+
+# 检查证书是否过期
+check_certificate_expiry() {
+    local cert_file="$1"
+    
+    if [[ ! -f "$cert_file" ]]; then
+        return 1
+    fi
+    
+    # 获取证书的过期时间（Unix时间戳）
+    local cert_expiry
+    cert_expiry=$(openssl x509 -in "$cert_file" -noout -dates | grep 'notAfter' | cut -d'=' -f2)
+    local expiry_timestamp
+    expiry_timestamp=$(date -d "$cert_expiry" +%s 2>/dev/null)
+    
+    if [[ -z "$expiry_timestamp" ]]; then
+        log_warn "无法解析证书过期时间"
+        return 1
+    fi
+    
+    # 获取当前时间戳
+    local current_timestamp
+    current_timestamp=$(date +%s)
+    
+    # 计算剩余天数（30天缓冲期）
+    local remaining_seconds=$((expiry_timestamp - current_timestamp))
+    local remaining_days=$((remaining_seconds / 86400))
+    
+    log_info "证书剩余有效期：$remaining_days 天"
+    
+    if [[ $remaining_days -gt 30 ]]; then
+        return 0  # 证书有效
     else
-        print_error "缺少证书文件或私钥文件："
-        [[ ! -f "$CERT_FILE" ]] && echo "  - 缺少证书文件: $CERT_FILE"
-        [[ ! -f "$KEY_FILE" ]] && echo "  - 缺少私钥文件: $KEY_FILE"
-        error_exit "请确保证书文件存在"
+        return 1  # 证书即将过期或已过期
+    fi
+}
+
+# 安装 certbot
+install_certbot() {
+    log_info "安装 certbot..."
+    
+    case "$PACKAGE_MANAGER" in
+        "apt")
+            apt-get update >/dev/null 2>&1
+            apt-get install -y snapd >/dev/null 2>&1 || {
+                # 如果snapd安装失败，使用apt安装
+                apt-get install -y certbot >/dev/null 2>&1
+                return $?
+            }
+            # 使用snap安装certbot
+            snap install core >/dev/null 2>&1
+            snap refresh core >/dev/null 2>&1
+            snap install --classic certbot >/dev/null 2>&1
+            ln -sf /snap/bin/certbot /usr/bin/certbot 2>/dev/null || true
+            ;;
+        "yum"|"dnf")
+            # 安装EPEL源
+            $PACKAGE_MANAGER install -y epel-release >/dev/null 2>&1 || true
+            $PACKAGE_MANAGER install -y certbot >/dev/null 2>&1
+            ;;
+    esac
+    
+    # 验证安装
+    if command -v certbot >/dev/null 2>&1; then
+        log_info "certbot 安装成功"
+        return 0
+    else
+        log_error "certbot 安装失败"
+        return 1
+    fi
+}
+
+# 申请 SSL 证书
+request_ssl_certificate() {
+    # 安装 certbot
+    if ! install_certbot; then
+        error_exit "安装 certbot 失败"
+    fi
+    
+    log_info "为域名 $DOMAIN_NAME 申请 SSL 证书..."
+    
+    # 停止可能占用80端口的服务
+    local services_to_stop=("nginx" "apache2" "httpd" "caddy")
+    local stopped_services=()
+    
+    for service in "${services_to_stop[@]}"; do
+        if systemctl is-active --quiet "$service" 2>/dev/null; then
+            log_info "临时停止服务: $service"
+            systemctl stop "$service"
+            stopped_services+=("$service")
+        fi
+    done
+    
+    # 使用 standalone 模式申请证书
+    local certbot_email="admin@${DOMAIN_NAME}"
+    log_info "使用邮箱: $certbot_email"
+    
+    # 申请证书
+    if certbot certonly \
+        --standalone \
+        --non-interactive \
+        --agree-tos \
+        --email "$certbot_email" \
+        --domains "$DOMAIN_NAME" \
+        --keep-until-expiring \
+        --expand; then
+        
+        log_info "证书申请成功"
+        
+        # 复制证书到指定目录
+        local letsencrypt_cert="/etc/letsencrypt/live/$DOMAIN_NAME/fullchain.pem"
+        local letsencrypt_key="/etc/letsencrypt/live/$DOMAIN_NAME/privkey.pem"
+        
+        if [[ -f "$letsencrypt_cert" && -f "$letsencrypt_key" ]]; then
+            cp "$letsencrypt_cert" "$CERT_FILE"
+            cp "$letsencrypt_key" "$KEY_FILE"
+            
+            # 设置正确的权限
+            chmod 644 "$CERT_FILE"
+            chmod 600 "$KEY_FILE"
+            
+            print_success "证书已保存到:"
+            print_info "  证书文件: $CERT_FILE"
+            print_info "  私钥文件: $KEY_FILE"
+            
+            # 设置自动续期
+            setup_certificate_renewal
+        else
+            log_error "证书文件未找到"
+        fi
+    else
+        log_error "证书申请失败"
+        
+        # 恢复停止的服务
+        for service in "${stopped_services[@]}"; do
+            log_info "恢复服务: $service"
+            systemctl start "$service"
+        done
+        
+        error_exit "SSL证书申请失败，请检查域名解析和网络连接"
+    fi
+    
+    # 恢复停止的服务
+    for service in "${stopped_services[@]}"; do
+        log_info "恢复服务: $service"
+        systemctl start "$service"
+    done
+}
+
+# 设置证书自动续期
+setup_certificate_renewal() {
+    log_info "设置证书自动续期..."
+    
+    # 创建续期脚本
+    cat > /usr/local/bin/renew-singbox-cert.sh <<'EOF'
+#!/bin/bash
+# SingBox 证书自动续期脚本
+
+DOMAIN_NAME="$1"
+CERT_FILE="/etc/ssl/cert/certCDN.pem"
+KEY_FILE="/etc/ssl/cert/privateCDN.key"
+
+if [[ -z "$DOMAIN_NAME" ]]; then
+    echo "错误：缺少域名参数"
+    exit 1
+fi
+
+# 续期证书
+if certbot renew --quiet; then
+    # 复制新证书
+    if [[ -f "/etc/letsencrypt/live/$DOMAIN_NAME/fullchain.pem" && -f "/etc/letsencrypt/live/$DOMAIN_NAME/privkey.pem" ]]; then
+        cp "/etc/letsencrypt/live/$DOMAIN_NAME/fullchain.pem" "$CERT_FILE"
+        cp "/etc/letsencrypt/live/$DOMAIN_NAME/privkey.pem" "$KEY_FILE"
+        
+        # 设置权限
+        chmod 644 "$CERT_FILE"
+        chmod 600 "$KEY_FILE"
+        
+        # 重启 sing-box 服务
+        systemctl restart sing-box 2>/dev/null || true
+        
+        echo "证书续期成功并已重启 sing-box 服务"
+    fi
+else
+    echo "证书续期失败"
+    exit 1
+fi
+EOF
+    
+    chmod +x /usr/local/bin/renew-singbox-cert.sh
+    
+    # 添加到 crontab（每天凌晨2点检查）
+    local cron_job="0 2 * * * /usr/local/bin/renew-singbox-cert.sh $DOMAIN_NAME >> /var/log/singbox-cert-renewal.log 2>&1"
+    
+    # 检查是否已存在相同的定时任务
+    if ! crontab -l 2>/dev/null | grep -F "/usr/local/bin/renew-singbox-cert.sh" >/dev/null; then
+        (crontab -l 2>/dev/null; echo "$cron_job") | crontab -
+        log_info "已设置证书自动续期定时任务"
+    else
+        log_info "证书自动续期定时任务已存在"
     fi
 }
 
@@ -268,6 +513,55 @@ select_domain() {
 }
 
 # =============================================================================
+# WARP 检测和智能 IP 选择函数
+# =============================================================================
+
+# WARP检测结果缓存
+IS_WARP_CACHED=""
+
+# 检测IPv4是否为WARP（带缓存，避免重复检测）
+is_warp_ipv4() {
+    # 如果已经检测过，直接返回缓存结果
+    if [[ -n "$IS_WARP_CACHED" ]]; then
+        [[ "$IS_WARP_CACHED" == "true" ]] && return 0 || return 1
+    fi
+    
+    # 首次检测
+    if [[ -n "$SERVER_IP" ]]; then
+        local org
+        if org=$(safe_curl "https://ipinfo.io/org" "$NETWORK_TIMEOUT" 1); then
+            if echo "$org" | grep -qi "cloudflare"; then
+                IS_WARP_CACHED="true"
+                return 0  # 是WARP
+            fi
+        fi
+    fi
+    
+    IS_WARP_CACHED="false"
+    return 1  # 不是WARP
+}
+
+# 根据WARP状态选择最佳IP
+get_optimal_ip() {
+    if is_warp_ipv4; then
+        # 如果有IPv6域名，优先使用域名
+        if [[ "$IS_IPV6" == true && -n "$DOMAIN_NAME" ]]; then
+            echo "$DOMAIN_NAME"
+        # 如果有IPv6地址但没有域名，使用IPv6地址
+        elif [[ "$IS_IPV6" == true && -n "$SERVER_IP" && "$SERVER_IP" =~ ^[0-9a-fA-F:]+$ ]]; then
+            echo "[$SERVER_IP]"  # IPv6地址需要用方括号包围
+        # 如果有其他域名，使用域名
+        elif [[ -n "$DOMAIN_NAME" ]]; then
+            echo "$DOMAIN_NAME"
+        else
+            echo "$SERVER_IP"
+        fi
+    else
+        echo "$SERVER_IP"    # 使用原IP
+    fi
+}
+
+# =============================================================================
 # 代理链接生成函数
 # =============================================================================
 
@@ -275,30 +569,34 @@ select_domain() {
 generate_proxy_links() {
     log_info "生成所有代理链接..."
     
+    # 获取最佳IP地址
+    local optimal_ip
+    optimal_ip=$(get_optimal_ip)
+    
     echo ""
     print_colored "$RED" "=================== 代理链接汇总 ==================="
     echo ""
     
     # 1. Reality链接
-    local reality_link="vless://${UUID}@${SERVER_IP}:${VLESS_PORT}?security=reality&flow=xtls-rprx-vision&type=tcp&sni=${SERVER}&fp=chrome&pbk=Y_-yCHC3Qi-Kz6OWpueQckAJSQuGEKffwWp8MlFgwTs&sid=0123456789abcded&encryption=none#Reality"
+    local reality_link="vless://${UUID}@${optimal_ip}:${VLESS_PORT}?security=reality&flow=xtls-rprx-vision&type=tcp&sni=${SERVER}&fp=chrome&pbk=Y_-yCHC3Qi-Kz6OWpueQckAJSQuGEKffwWp8MlFgwTs&sid=0123456789abcded&encryption=none#Reality"
     echo "🔷 Reality (VLESS) 链接:"
     echo "$reality_link"
     echo ""
     
     # 2. Hysteria2链接
-    local hy2_link="hysteria2://${HYSTERIA_PASSWORD}@${SERVER_IP}:${HYSTERIA_PORT}?insecure=1&alpn=h3&sni=bing.com#Hysteria2"
+    local hy2_link="hysteria2://${HYSTERIA_PASSWORD}@${optimal_ip}:${HYSTERIA_PORT}?insecure=1&alpn=h3&sni=bing.com#Hysteria2"
     echo "🚀 Hysteria2 链接:"
     echo "$hy2_link"
     echo ""
     
     # 3. Trojan链接
-    local trojan_link="trojan://${HYSTERIA_PASSWORD}@${SERVER_IP}:63333?sni=bing.com&type=ws&path=%2Ftrojan&host=bing.com&allowInsecure=1&udp=true&alpn=http%2F1.1#Trojan"
+    local trojan_link="trojan://${HYSTERIA_PASSWORD}@${optimal_ip}:63333?sni=bing.com&type=ws&path=%2Ftrojan&host=bing.com&allowInsecure=1&udp=true&alpn=http%2F1.1#Trojan"
     echo "🛡️ Trojan WS 链接:"
     echo "$trojan_link"
     echo ""
     
     # 4. TUIC链接
-    local tuic_link="tuic://${UUID}:@${SERVER_IP}:61555?alpn=h3&allow_insecure=1&congestion_control=bbr#TUIC"
+    local tuic_link="tuic://${UUID}:@${optimal_ip}:61555?alpn=h3&allow_insecure=1&congestion_control=bbr#TUIC"
     echo "⚡ TUIC 链接:"
     echo "$tuic_link"
     echo ""
@@ -314,7 +612,7 @@ generate_proxy_links() {
     # 6. SS专线链接
     local ss_encoded
     ss_encoded=$(echo -n "aes-128-gcm:${HYSTERIA_PASSWORD}" | base64 2>/dev/null | tr -d '\n')
-    local ss_link="ss://${ss_encoded}@${SERVER_IP}:59000#SS专线"
+    local ss_link="ss://${ss_encoded}@${optimal_ip}:59000#SS专线"
     echo "📡 SS 专线链接:"
     echo "$ss_link"
     echo ""
@@ -335,7 +633,7 @@ generate_proxy_links() {
 # 生成SS2022链接
 generate_ss2022_link() {
     local ss_password="$1"
-    local server="$SERVER_IP"
+    local server=$(get_optimal_ip)
     local port="$SS_PORT"
     local cipher="2022-blake3-chacha20-poly1305"
     local plugin_host="$SERVER"

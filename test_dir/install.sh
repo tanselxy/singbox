@@ -129,9 +129,9 @@ show_banner() {
     
     echo ""
     print_colored "$CYAN" "╭──────────────────────────────────────────────────╮"
-    print_colored "$CYAN" "│    ${YELLOW}https://my.racknerd.com/aff.php?aff=10790&pid=912${CYAN} │"
+    print_colored "$CYAN" "│ ${YELLOW}https://my.racknerd.com/aff.php?aff=10790&pid=912${CYAN}│"
     print_colored "$CYAN" "│                                                  │"
-    print_colored "$CYAN" "│            ${GREEN}年付仅需10美元${CYAN}                    │"
+    print_colored "$CYAN" "│            ${GREEN}年付仅需10美元${CYAN}                      │"
     print_colored "$CYAN" "╰──────────────────────────────────────────────────╯"
     echo ""
     
@@ -1018,14 +1018,30 @@ download_file() {
 
 # 检测网络连通性
 check_network_connectivity() {
-    local test_urls=(
+    # IPv4测试地址
+    local ipv4_urls=(
         "8.8.8.8"
         "1.1.1.1"
         "114.114.114.114"
     )
     
-    for url in "${test_urls[@]}"; do
+    # IPv6测试地址
+    local ipv6_urls=(
+        "2001:4860:4860::8888"  # Google DNS IPv6
+        "2606:4700:4700::1111"  # Cloudflare DNS IPv6
+        "2400:3200::1"          # 阿里DNS IPv6
+    )
+    
+    # 先测试IPv4连接
+    for url in "${ipv4_urls[@]}"; do
         if ping -c 1 -W 5 "$url" >/dev/null 2>&1; then
+            return 0
+        fi
+    done
+    
+    # 如果IPv4失败，测试IPv6连接
+    for url in "${ipv6_urls[@]}"; do
+        if ping6 -c 1 -W 5 "$url" >/dev/null 2>&1; then
             return 0
         fi
     done

@@ -227,20 +227,39 @@ multi_source_download() {
 check_network_connectivity() {
     log_info "检测网络连通性..."
     
-    local test_urls=(
+    # IPv4测试地址
+    local ipv4_urls=(
         "8.8.8.8"
         "1.1.1.1"
         "114.114.114.114"
     )
     
-    for url in "${test_urls[@]}"; do
+    # IPv6测试地址
+    local ipv6_urls=(
+        "2001:4860:4860::8888"  # Google DNS IPv6
+        "2606:4700:4700::1111"  # Cloudflare DNS IPv6
+        "2400:3200::1"          # 阿里DNS IPv6
+    )
+    
+    # 先测试IPv4连接
+    log_debug "测试IPv4连接..."
+    for url in "${ipv4_urls[@]}"; do
         if ping -c 1 -W 5 "$url" >/dev/null 2>&1; then
-            log_info "网络连接正常 (测试地址: $url)"
+            log_info "网络连接正常 (IPv4测试地址: $url)"
             return 0
         fi
     done
     
-    log_error "网络连接检查失败"
+    # 如果IPv4失败，测试IPv6连接
+    log_debug "IPv4连接失败，尝试IPv6连接..."
+    for url in "${ipv6_urls[@]}"; do
+        if ping6 -c 1 -W 5 "$url" >/dev/null 2>&1; then
+            log_info "网络连接正常 (IPv6测试地址: $url)"
+            return 0
+        fi
+    done
+    
+    log_error "网络连接检查失败 (IPv4和IPv6都不可达)"
     return 1
 }
 
