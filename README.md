@@ -27,14 +27,14 @@ bash <(curl -sL singbox.soups.eu.org/get)
 
 ### 2. 只有ipv6的机器执行安装脚本
 
-、、、bash
+```bash
 cat > /etc/resolv.conf << EOF
 nameserver 2001:4860:4860::8888
 nameserver 2001:4860:4860::8844
 nameserver 8.8.8.8
 nameserver 8.8.4.4
 EOF
-、、、
+```
 
 ```bash
 bash <(curl -sL https://tanselxy.github.io/singbox/setup.sh)
