@@ -37,7 +37,7 @@ EOF
 ```
 
 ```bash
-bash <(curl -sL https://tanselxy.github.io/singbox/setup.sh)
+bash <(curl -sL singbox.soups.eu.org/get)
 ```
 
 ## 📚 功能模块说明
