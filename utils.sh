@@ -250,6 +250,7 @@ allocate_port_from_pool() {
 }
 
 # NAT模式：从用户指定范围分配端口（VLESS_CDN除外）
+# 使用全局变量 ALLOCATED_PORT_RESULT 返回结果
 allocate_port_from_nat_range() {
     local protocol="$1"
     local start_port="$2"
@@ -261,7 +262,7 @@ allocate_port_from_nat_range() {
             log_error "端口池中未找到 VLESS_CDN 端口"
             return 1
         fi
-        echo "${PORT_POOL[$protocol]}"
+        ALLOCATED_PORT_RESULT="${PORT_POOL[$protocol]}"
         return 0
     fi
 
@@ -302,7 +303,8 @@ allocate_port_from_nat_range() {
         if ! is_port_occupied_by_others "$port"; then
             # 端口可用（未占用或仅被 sing-box 占用）
             ALLOCATED_PORTS+=("$port")
-            echo "$port"
+            ALLOCATED_PORT_RESULT="$port"
+            log_info "为 $protocol 分配端口: $port (已分配: ${#ALLOCATED_PORTS[@]}个)"
             return 0
         fi
 
@@ -727,51 +729,166 @@ change_ssh_port() {
 # HTTP服务器函数
 # =============================================================================
 
-# 启动HTTP下载服务（恢复原版简单逻辑）
+# 启动HTTP下载服务（使用 Nginx）
 start_http_server() {
-    local http_dir="/root"
+    local http_dir="/var/www/singbox"
     local port="${DOWNLOAD_PORT:-14567}"
-    
-    # 检查端口是否被占用，如果有则先杀掉
+
+    # 创建 HTTP 服务目录
+    mkdir -p "$http_dir"
+    chmod 755 "$http_dir"
+
+    # 复制配置文件到 HTTP 目录
+    if [[ -f "/root/singbox_racknerd.yaml" ]]; then
+        cp /root/singbox_racknerd.yaml "$http_dir/" 2>/dev/null || true
+    fi
+    if [[ -f "/root/client_config.yaml" ]]; then
+        cp /root/client_config.yaml "$http_dir/" 2>/dev/null || true
+    fi
+
+    log_info "启动HTTP下载服务 (端口: $port, 目录: $http_dir)..."
+
+    # 检查 Nginx 是否可用，如果没有则自动安装
+    if ! command -v nginx >/dev/null 2>&1; then
+        log_warn "未找到 Nginx，正在自动安装..."
+        if ! install_nginx; then
+            log_error "Nginx 安装失败"
+            return 1
+        fi
+    fi
+
+    # 检查端口是否被占用
     local pid
     pid=$(lsof -t -i :$port 2>/dev/null || echo "")
-    
+
     if [[ -n "$pid" ]]; then
         log_info "检测到端口 $port 已被占用 (进程 $pid)，停止旧服务..."
         kill "$pid" 2>/dev/null || true
         sleep 2
         log_info "已停止旧HTTP服务"
     fi
-    
-    log_info "启动HTTP下载服务 (端口: $port)..."
-    cd "$http_dir" || {
-        log_error "无法切换到目录 $http_dir"
+
+    # 调用 Nginx 启动函数
+    start_http_server_nginx "$http_dir" "$port"
+}
+
+# 安装 Nginx
+install_nginx() {
+    log_info "开始安装 Nginx..."
+
+    # 检测包管理器
+    local pkg_manager=""
+    if command -v apt-get >/dev/null 2>&1; then
+        pkg_manager="apt"
+    elif command -v yum >/dev/null 2>&1; then
+        pkg_manager="yum"
+    elif command -v dnf >/dev/null 2>&1; then
+        pkg_manager="dnf"
+    else
+        log_error "未找到支持的包管理器 (apt/yum/dnf)"
         return 1
-    }
-    
-    # 使用原版的简单启动方式
-    nohup python3 -m http.server "$port" --bind 0.0.0.0 >/dev/null 2>&1 &
-    local http_pid=$!
-    
-    # 等待服务启动
-    sleep 2
-    
-    # 验证服务启动
-    if kill -0 "$http_pid" 2>/dev/null && lsof -i:"$port" >/dev/null 2>&1; then
-        print_success "HTTP服务已启动 (PID: $http_pid, 端口: $port)"
-        
-        # 显示绑定信息
-        local bind_info
-        bind_info=$(lsof -i:"$port" | grep python | awk '{print $9}' || echo "未知")
-        log_info "服务绑定地址: $bind_info"
-        log_info "配置文件将在10分钟后自动删除，HTTP服务随之关闭"
-        
-        # 保存PID供后续清理
-        echo "$http_pid" > "/tmp/singbox_http_$$.pid"
+    fi
+
+    # 根据包管理器安装
+    case "$pkg_manager" in
+        apt)
+            log_info "使用 apt 安装 Nginx..."
+            apt-get update -qq >/dev/null 2>&1 || log_warn "apt update 失败，继续安装..."
+            if apt-get install -y nginx >/dev/null 2>&1; then
+                log_info "Nginx 安装成功 (apt)"
+            else
+                log_error "Nginx 安装失败 (apt)"
+                return 1
+            fi
+            ;;
+        yum)
+            log_info "使用 yum 安装 Nginx..."
+            if yum install -y nginx >/dev/null 2>&1; then
+                log_info "Nginx 安装成功 (yum)"
+            else
+                log_error "Nginx 安装失败 (yum)"
+                return 1
+            fi
+            ;;
+        dnf)
+            log_info "使用 dnf 安装 Nginx..."
+            if dnf install -y nginx >/dev/null 2>&1; then
+                log_info "Nginx 安装成功 (dnf)"
+            else
+                log_error "Nginx 安装失败 (dnf)"
+                return 1
+            fi
+            ;;
+    esac
+
+    # 验证安装
+    if command -v nginx >/dev/null 2>&1; then
+        local nginx_version
+        nginx_version=$(nginx -v 2>&1 | grep -oP 'nginx/\K[0-9.]+' || echo "未知")
+        print_success "Nginx 已成功安装 (版本: $nginx_version)"
         return 0
     else
-        log_error "HTTP服务启动失败"
-        kill "$http_pid" 2>/dev/null || true
+        log_error "Nginx 安装后未找到可执行文件"
+        return 1
+    fi
+}
+
+# Nginx 方式启动 HTTP 服务（备用方案）
+start_http_server_nginx() {
+    local http_dir="$1"
+    local port="$2"
+    local nginx_conf="/tmp/singbox_download_nginx_$$.conf"
+
+    log_info "使用 Nginx 启动HTTP服务..."
+
+    # 创建临时 Nginx 配置
+    cat > "$nginx_conf" <<'NGINX_EOF'
+daemon off;
+worker_processes 1;
+error_log /tmp/singbox_nginx_error.log warn;
+pid /tmp/singbox_nginx.pid;
+
+events {
+    worker_connections 512;
+}
+
+http {
+    default_type application/octet-stream;
+    access_log off;
+
+    server {
+        listen PORT_PLACEHOLDER;
+        listen [::]:PORT_PLACEHOLDER;
+        server_name _;
+
+        location / {
+            root HTTP_DIR_PLACEHOLDER;
+            autoindex on;
+            autoindex_exact_size off;
+            autoindex_localtime on;
+        }
+    }
+}
+NGINX_EOF
+
+    # 替换占位符
+    sed -i "s|PORT_PLACEHOLDER|$port|g" "$nginx_conf"
+    sed -i "s|HTTP_DIR_PLACEHOLDER|$http_dir|g" "$nginx_conf"
+
+    # 启动 Nginx
+    nohup nginx -c "$nginx_conf" >/tmp/singbox_nginx_startup.log 2>&1 &
+    local nginx_pid=$!
+    sleep 3
+
+    # 验证启动
+    if kill -0 "$nginx_pid" 2>/dev/null && lsof -i:"$port" >/dev/null 2>&1; then
+        print_success "HTTP服务已启动 (Nginx, PID: $nginx_pid, 端口: $port)"
+        echo "$nginx_pid" > "/tmp/singbox_http_$$.pid"
+        echo "$nginx_conf" > "/tmp/singbox_nginx_conf_$$.txt"
+        return 0
+    else
+        log_error "Nginx 启动失败，查看日志: /tmp/singbox_nginx_startup.log"
+        rm -f "$nginx_conf"
         return 1
     fi
 }

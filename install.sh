@@ -653,6 +653,7 @@ deploy_fresh_install() {
 initialize_nat() {
     local start_port="$1"
     local end_port="$2"
+    local enable_http="${3:-0}"  # 第三个参数：是否启用HTTP服务
 
     log_info "NAT模式初始化..."
 
@@ -682,41 +683,61 @@ initialize_nat() {
 
     # 从用户指定范围分配端口（VLESS_CDN除外）
     log_info "从端口范围 $start_port-$end_port 分配端口..."
-    VLESS_PORT=$(allocate_port_from_nat_range "VLESS" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
+
+    allocate_port_from_nat_range "VLESS" "$start_port" "$end_port" 2>>"$LOG_FILE" || {
         log_error "从NAT范围获取VLESS端口失败"
         return 1
     }
+    VLESS_PORT="$ALLOCATED_PORT_RESULT"
 
-    SS_PORT=$(allocate_port_from_nat_range "SS" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
+    allocate_port_from_nat_range "SS" "$start_port" "$end_port" 2>>"$LOG_FILE" || {
         log_error "从NAT范围获取SS端口失败"
         return 1
     }
+    SS_PORT="$ALLOCATED_PORT_RESULT"
 
-    HYSTERIA_PORT=$(allocate_port_from_nat_range "HYSTERIA" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
+    allocate_port_from_nat_range "HYSTERIA" "$start_port" "$end_port" 2>>"$LOG_FILE" || {
         log_error "从NAT范围获取Hysteria端口失败"
         return 1
     }
+    HYSTERIA_PORT="$ALLOCATED_PORT_RESULT"
 
-    TROJAN_PORT=$(allocate_port_from_nat_range "TROJAN" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
+    allocate_port_from_nat_range "TROJAN" "$start_port" "$end_port" 2>>"$LOG_FILE" || {
         log_error "从NAT范围获取Trojan端口失败"
         return 1
     }
+    TROJAN_PORT="$ALLOCATED_PORT_RESULT"
 
-    TUIC_PORT=$(allocate_port_from_nat_range "TUIC" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
+    allocate_port_from_nat_range "TUIC" "$start_port" "$end_port" 2>>"$LOG_FILE" || {
         log_error "从NAT范围获取TUIC端口失败"
         return 1
     }
+    TUIC_PORT="$ALLOCATED_PORT_RESULT"
 
-    SS_DIRECT_PORT=$(allocate_port_from_nat_range "SS_DIRECT" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
+    allocate_port_from_nat_range "SS_DIRECT" "$start_port" "$end_port" 2>>"$LOG_FILE" || {
         log_error "从NAT范围获取SS_DIRECT端口失败"
         return 1
     }
+    SS_DIRECT_PORT="$ALLOCATED_PORT_RESULT"
 
     # VLESS_CDN 使用端口池固定端口
-    VLESS_CDN_PORT=$(allocate_port_from_nat_range "VLESS_CDN" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
+    allocate_port_from_nat_range "VLESS_CDN" "$start_port" "$end_port" 2>>"$LOG_FILE" || {
         log_error "获取VLESS_CDN端口失败"
         return 1
     }
+    VLESS_CDN_PORT="$ALLOCATED_PORT_RESULT"
+
+    # 如果启用 HTTP 服务，从范围分配一个端口
+    if (( enable_http == 1 )); then
+        allocate_port_from_nat_range "HTTP_DOWNLOAD" "$start_port" "$end_port" 2>>"$LOG_FILE" || {
+            log_error "从NAT范围获取HTTP下载端口失败"
+            return 1
+        }
+        DOWNLOAD_PORT="$ALLOCATED_PORT_RESULT"
+        log_info "HTTP下载端口: $DOWNLOAD_PORT"
+    else
+        DOWNLOAD_PORT=""
+    fi
 
     log_info "NAT模式初始化完成"
     log_info "VLESS端口: $VLESS_PORT"
@@ -758,6 +779,19 @@ deploy_nat_install() {
 
     read -r -p "请输入端口范围: " port_range
 
+    # 询问是否需要 HTTP 下载服务
+    echo ""
+    read -r -p "是否启用 HTTP 下载服务用于配置文件下载? (y/n，默认: y): " enable_http
+    enable_http=${enable_http:-y}
+
+    local need_http_port=0
+    if [[ "$enable_http" =~ ^[Yy]$ ]]; then
+        need_http_port=1
+        log_info "将从端口范围中分配一个端口给 HTTP 下载服务"
+    else
+        log_info "已禁用 HTTP 下载服务"
+    fi
+
     # 验证端口范围格式
     if [[ ! "$port_range" =~ ^([0-9]+)-([0-9]+)$ ]]; then
         error_exit "无效的端口范围格式，请使用格式：起始端口-结束端口（例如：11621-11639）"
@@ -779,12 +813,20 @@ deploy_nat_install() {
         error_exit "起始端口不能大于结束端口"
     fi
 
-    # 检查端口范围是否足够（至少需要6个端口）
+    # 检查端口范围是否足够
     local port_count=$((end_port - start_port + 1))
     local required_ports=6  # VLESS、SS、Hysteria、Trojan、TUIC、SS_DIRECT
 
+    if (( need_http_port == 1 )); then
+        required_ports=$((required_ports + 1))  # 额外需要一个 HTTP 端口
+    fi
+
     if (( port_count < required_ports )); then
-        error_exit "端口范围太小，至少需要 $required_ports 个端口（VLESS、SS、Hysteria、Trojan、TUIC、SS_DIRECT）"
+        if (( need_http_port == 1 )); then
+            error_exit "端口范围太小，至少需要 $required_ports 个端口（VLESS、SS、Hysteria、Trojan、TUIC、SS_DIRECT + HTTP服务）"
+        else
+            error_exit "端口范围太小，至少需要 $required_ports 个端口（VLESS、SS、Hysteria、Trojan、TUIC、SS_DIRECT）"
+        fi
     fi
 
     # 检查范围内可用端口数量（排除被非 sing-box 进程占用的）
@@ -833,7 +875,7 @@ deploy_nat_install() {
     log_info "端口范围验证通过"
 
     # NAT模式初始化
-    if ! initialize_nat "$start_port" "$end_port"; then
+    if ! initialize_nat "$start_port" "$end_port" "$need_http_port"; then
         error_exit "NAT模式初始化失败"
     fi
 
@@ -846,7 +888,11 @@ deploy_nat_install() {
     generate_client_config_file || error_exit "客户端配置生成失败"
 
     # 启动服务
-    start_http_server || log_warn "HTTP服务启动可能失败"
+    if [[ -n "$DOWNLOAD_PORT" ]]; then
+        start_http_server || log_warn "HTTP服务启动失败，但不影响代理功能"
+    else
+        log_info "已跳过 HTTP 下载服务启动"
+    fi
     enable_and_start_service || error_exit "Sing-Box服务启动失败"
 
     # 网络优化
