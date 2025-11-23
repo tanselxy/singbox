@@ -911,24 +911,29 @@ provide_download_link() {
 
 # 清理任务
 schedule_cleanup() {
-    log_info "设置定时清理任务..."
-    
+    # 检查是否设置了环境变量来禁用自动清理
+    if [[ "${SINGBOX_KEEP_HTTP:-0}" == "1" ]]; then
+        log_info "HTTP 服务将持久运行（已设置 SINGBOX_KEEP_HTTP=1）"
+        return 0
+    fi
+
+    log_info "设置定时清理任务（10分钟后自动关闭 HTTP 服务）..."
+
     # 在后台启动清理任务
     (
         sleep 600  # 10分钟后清理
-        
-        # log_info "执行定时清理..."
-        # rm -f /root/singbox_*.yaml
-        
+
         # 关闭HTTP服务
         local pid
         pid=$(lsof -t -i:"$DOWNLOAD_PORT" 2>/dev/null || echo "")
         if [[ -n "$pid" ]]; then
             kill -9 "$pid" 2>/dev/null || true
-            #log_info "HTTP服务已关闭"
+            log_info "HTTP服务已自动关闭（10分钟后清理）" >> "$LOG_FILE"
         fi
-        
-        #log_info "清理任务完成"
+
+        # 清理临时文件
+        rm -f /tmp/singbox_nginx_*.conf 2>/dev/null || true
+        rm -f /tmp/singbox_http_*.pid 2>/dev/null || true
     ) &
 }
 

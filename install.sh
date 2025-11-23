@@ -772,9 +772,8 @@ deploy_nat_install() {
     echo "  - SS Direct"
     echo ""
     echo "请输入端口范围（例如：11621-11639）"
-    echo "建议：至少提供 10-15 个端口，以应对某些端口可能被占用的情况"
+    echo "建议：至少提供 5-10 个端口，以应对某些端口可能被占用的情况"
     echo ""
-    echo "注意：VLESS_CDN 将使用固定端口 ${PORT_POOL[VLESS_CDN]}，不占用此范围"
     echo ""
 
     read -r -p "请输入端口范围: " port_range
