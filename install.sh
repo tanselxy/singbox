@@ -776,7 +776,49 @@ deploy_nat_install() {
     echo ""
     echo ""
 
-    read -r -p "请输入端口范围: " port_range
+    # 端口范围输入和验证循环
+    local port_range=""
+    local start_port=0
+    local end_port=0
+    local port_range_valid=false
+
+    while [[ "$port_range_valid" == "false" ]]; do
+        read -r -p "请输入端口范围: " port_range
+
+        # 检查是否为空
+        if [[ -z "$port_range" ]]; then
+            echo "[错误] 端口范围不能为空，请重新输入"
+            continue
+        fi
+
+        # 验证端口范围格式
+        if [[ ! "$port_range" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+            echo "[错误] 无效的端口范围格式，请使用格式：起始端口-结束端口（例如：11621-11639）"
+            continue
+        fi
+
+        start_port="${BASH_REMATCH[1]}"
+        end_port="${BASH_REMATCH[2]}"
+
+        # 验证端口范围有效性
+        if (( start_port < 1024 || start_port > 65535 )); then
+            echo "[错误] 起始端口必须在 1024-65535 之间"
+            continue
+        fi
+
+        if (( end_port < 1024 || end_port > 65535 )); then
+            echo "[错误] 结束端口必须在 1024-65535 之间"
+            continue
+        fi
+
+        if (( start_port > end_port )); then
+            echo "[错误] 起始端口不能大于结束端口"
+            continue
+        fi
+
+        # 所有验证通过
+        port_range_valid=true
+    done
 
     # 询问是否需要 HTTP 下载服务
     echo ""
@@ -789,27 +831,6 @@ deploy_nat_install() {
         log_info "将从端口范围中分配一个端口给 HTTP 下载服务"
     else
         log_info "已禁用 HTTP 下载服务"
-    fi
-
-    # 验证端口范围格式
-    if [[ ! "$port_range" =~ ^([0-9]+)-([0-9]+)$ ]]; then
-        error_exit "无效的端口范围格式，请使用格式：起始端口-结束端口（例如：11621-11639）"
-    fi
-
-    local start_port="${BASH_REMATCH[1]}"
-    local end_port="${BASH_REMATCH[2]}"
-
-    # 验证端口范围有效性
-    if (( start_port < 1024 || start_port > 65535 )); then
-        error_exit "起始端口必须在 1024-65535 之间"
-    fi
-
-    if (( end_port < 1024 || end_port > 65535 )); then
-        error_exit "结束端口必须在 1024-65535 之间"
-    fi
-
-    if (( start_port > end_port )); then
-        error_exit "起始端口不能大于结束端口"
     fi
 
     # 检查端口范围是否足够
