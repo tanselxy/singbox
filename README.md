@@ -19,11 +19,12 @@ singbox-deploy/
 
 ## 🚀 快速开始
 
-### 1. 有ipv4的机器执行安装脚本
+### 1. 有ipv4的机器执行安装脚本(普通机器请选择-》1 Nat机器执行脚本后选择-〉2)
 
 ```bash
 bash <(curl -sL singbox.soups.eu.org/get)
 ```
+
 
 ### 2. 只有ipv6的机器执行安装脚本
 
