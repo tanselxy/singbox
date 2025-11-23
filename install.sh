@@ -136,7 +136,7 @@ show_banner() {
     
     echo ""
     print_colored "$CYAN" "╭──────────────────────────────────────────────────╮"
-    print_colored "$CYAN" "│ ${YELLOW}https://my.racknerd.com/aff.php?aff=10790&pid=912${CYAN}│"
+    print_colored "$CYAN" "│ ${YELLOW}https://my.racknerd.com/aff.php?aff=10790&pid=923${CYAN}│"
     print_colored "$CYAN" "│                                                  │"
     print_colored "$CYAN" "│            ${GREEN}年付仅需10美元${CYAN}                      │"
     print_colored "$CYAN" "╰──────────────────────────────────────────────────╯"
