@@ -767,19 +767,24 @@ deploy_nat_install() {
     fi
 
     # 检查范围内可用端口数量（排除被非 sing-box 进程占用的）
+    log_info "检查端口范围可用性..."
     local available_count=0
     local singbox_occupied=0
-    for ((port=start_port; port<=end_port; port++)); do
-        if ! is_port_occupied_by_others "$port"; then
-            ((available_count++))
-        else
-            # 被其他程序占用
-            :
-        fi
+    local port
 
-        # 统计被 sing-box 占用的端口（用于提示）
-        if lsof -i:"$port" >/dev/null 2>&1 && ! is_port_occupied_by_others "$port"; then
-            ((singbox_occupied++))
+    for ((port=start_port; port<=end_port; port++)); do
+        # 检查端口是否被其他程序占用
+        if is_port_occupied_by_others "$port" 2>>"$LOG_FILE"; then
+            # 被其他程序占用
+            log_info "端口 $port 被其他程序占用，跳过"
+        else
+            # 可用端口
+            ((available_count++))
+
+            # 统计被 sing-box 占用的端口（用于提示）
+            if lsof -i:"$port" >/dev/null 2>&1; then
+                ((singbox_occupied++))
+            fi
         fi
     done
 

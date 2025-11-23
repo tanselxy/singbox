@@ -179,6 +179,12 @@ check_and_start_systemd_resolved() {
 is_port_occupied_by_others() {
     local port="$1"
 
+    # 检查 lsof 命令是否可用
+    if ! command -v lsof >/dev/null 2>&1; then
+        # lsof 不可用，假定端口可用
+        return 1
+    fi
+
     # 检查端口是否被占用
     if ! lsof -i:"$port" >/dev/null 2>&1; then
         # 端口未被占用
@@ -186,7 +192,8 @@ is_port_occupied_by_others() {
     fi
 
     # 端口被占用，检查是否是 sing-box 进程
-    local process_info=$(lsof -i:"$port" -t 2>/dev/null)
+    local process_info
+    process_info=$(lsof -i:"$port" -t 2>/dev/null) || return 1
 
     if [[ -z "$process_info" ]]; then
         # 无法获取进程信息，认为端口可用
@@ -194,8 +201,12 @@ is_port_occupied_by_others() {
     fi
 
     # 检查进程名称
+    local pid
     for pid in $process_info; do
-        local process_name=$(ps -p "$pid" -o comm= 2>/dev/null)
+        local process_name
+        process_name=$(ps -p "$pid" -o comm= 2>/dev/null) || continue
+
+        # 检查进程名中是否包含 sing-box
         if [[ "$process_name" != *"sing-box"* ]]; then
             # 被非 sing-box 进程占用
             return 0
