@@ -87,6 +87,11 @@ generate_server_config() {
     
     log_info "生成配置文件: $config_path"
     
+    # 设置默认端口（如果未设置）
+    TROJAN_PORT=${TROJAN_PORT:-${PORT_POOL[TROJAN]}}
+    TUIC_PORT=${TUIC_PORT:-${PORT_POOL[TUIC]}}
+    SS_DIRECT_PORT=${SS_DIRECT_PORT:-${PORT_POOL[SS_DIRECT]}}
+
     # 验证必要变量
     if [[ -z "$SS_PORT" || -z "$VLESS_PORT" || -z "$HYSTERIA_PORT" || -z "$UUID" || -z "$SERVER" ]]; then
         log_error "配置变量不完整"
@@ -94,13 +99,16 @@ generate_server_config() {
         log_error "UUID=$UUID, SERVER=$SERVER"
         return 1
     fi
-    
+
     # 替换模板中的变量
     local temp_config="${config_path}.tmp"
-    
+
     sed -e "s/{{SS_PORT}}/$SS_PORT/g" \
         -e "s/{{VLESS_PORT}}/$VLESS_PORT/g" \
         -e "s/{{HYSTERIA_PORT}}/$HYSTERIA_PORT/g" \
+        -e "s/{{TROJAN_PORT}}/$TROJAN_PORT/g" \
+        -e "s/{{TUIC_PORT}}/$TUIC_PORT/g" \
+        -e "s/{{SS_DIRECT_PORT}}/$SS_DIRECT_PORT/g" \
         -e "s/{{UUID}}/$UUID/g" \
         -e "s/{{SERVER}}/$SERVER/g" \
         -e "s|{{SS_PASSWORD}}|$ss_password|g" \

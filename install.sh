@@ -657,7 +657,7 @@ initialize_nat() {
     log_info "NAT模式初始化..."
 
     # 创建必要的目录
-    mkdir -p "$CONFIG_DIR" "$LOG_DIR" "$TEMP_DIR" || {
+    mkdir -p "$CONFIG_DIR" "$CERT_DIR" "$TEMP_DIR" || {
         echo "无法创建必要的目录"
         return 1
     }
@@ -697,6 +697,21 @@ initialize_nat() {
         return 1
     }
 
+    TROJAN_PORT=$(allocate_port_from_nat_range "TROJAN" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
+        log_error "从NAT范围获取Trojan端口失败"
+        return 1
+    }
+
+    TUIC_PORT=$(allocate_port_from_nat_range "TUIC" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
+        log_error "从NAT范围获取TUIC端口失败"
+        return 1
+    }
+
+    SS_DIRECT_PORT=$(allocate_port_from_nat_range "SS_DIRECT" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
+        log_error "从NAT范围获取SS_DIRECT端口失败"
+        return 1
+    }
+
     # VLESS_CDN 使用端口池固定端口
     VLESS_CDN_PORT=$(allocate_port_from_nat_range "VLESS_CDN" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
         log_error "获取VLESS_CDN端口失败"
@@ -707,6 +722,9 @@ initialize_nat() {
     log_info "VLESS端口: $VLESS_PORT"
     log_info "SS端口: $SS_PORT"
     log_info "Hysteria端口: $HYSTERIA_PORT"
+    log_info "Trojan端口: $TROJAN_PORT"
+    log_info "TUIC端口: $TUIC_PORT"
+    log_info "SS_DIRECT端口: $SS_DIRECT_PORT"
     log_info "VLESS_CDN端口: $VLESS_CDN_PORT (固定)"
 
     return 0
@@ -727,10 +745,13 @@ deploy_nat_install() {
     echo "NAT 模式需要为以下协议分配端口："
     echo "  - VLESS"
     echo "  - Shadowsocks (SS)"
-    echo "  - Hysteria"
+    echo "  - Hysteria2"
+    echo "  - Trojan"
+    echo "  - TUIC"
+    echo "  - SS Direct"
     echo ""
     echo "请输入端口范围（例如：11621-11639）"
-    echo "建议：至少提供 5-10 个端口，以应对某些端口可能被占用的情况"
+    echo "建议：至少提供 10-15 个端口，以应对某些端口可能被占用的情况"
     echo ""
     echo "注意：VLESS_CDN 将使用固定端口 ${PORT_POOL[VLESS_CDN]}，不占用此范围"
     echo ""
@@ -758,12 +779,12 @@ deploy_nat_install() {
         error_exit "起始端口不能大于结束端口"
     fi
 
-    # 检查端口范围是否足够（至少需要3个端口）
+    # 检查端口范围是否足够（至少需要6个端口）
     local port_count=$((end_port - start_port + 1))
-    local required_ports=3  # VLESS、SS、Hysteria
+    local required_ports=6  # VLESS、SS、Hysteria、Trojan、TUIC、SS_DIRECT
 
     if (( port_count < required_ports )); then
-        error_exit "端口范围太小，至少需要 $required_ports 个端口（VLESS、SS、Hysteria）"
+        error_exit "端口范围太小，至少需要 $required_ports 个端口（VLESS、SS、Hysteria、Trojan、TUIC、SS_DIRECT）"
     fi
 
     # 检查范围内可用端口数量（排除被非 sing-box 进程占用的）
@@ -771,22 +792,33 @@ deploy_nat_install() {
     local available_count=0
     local singbox_occupied=0
     local port
+    local check_result
+
+    # 临时禁用 set -e，因为端口检查函数会返回非零值
+    set +e
 
     for ((port=start_port; port<=end_port; port++)); do
         # 检查端口是否被其他程序占用
-        if is_port_occupied_by_others "$port" 2>>"$LOG_FILE"; then
+        # 返回0表示被占用，返回1表示可用
+        is_port_occupied_by_others "$port" 2>>"$LOG_FILE"
+        check_result=$?
+
+        if [ $check_result -eq 0 ]; then
             # 被其他程序占用
             log_info "端口 $port 被其他程序占用，跳过"
         else
             # 可用端口
-            ((available_count++))
+            available_count=$((available_count + 1))
 
             # 统计被 sing-box 占用的端口（用于提示）
             if lsof -i:"$port" >/dev/null 2>&1; then
-                ((singbox_occupied++))
+                singbox_occupied=$((singbox_occupied + 1))
             fi
         fi
     done
+
+    # 恢复 set -e
+    set -e
 
     if (( singbox_occupied > 0 )); then
         log_info "检测到 $singbox_occupied 个端口正被 sing-box 使用，重新安装时会自动释放"

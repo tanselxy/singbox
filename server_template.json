@@ -75,7 +75,7 @@
       "type": "shadowsocks",
       "tag": "ss-ix",
       "listen": "::",
-      "listen_port": 59000,
+      "listen_port": {{SS_DIRECT_PORT}},
       "method": "aes-128-gcm",
       "password": "{{HYSTERIA_PASSWORD}}"
     },
@@ -83,7 +83,7 @@
       "type": "tuic",
       "tag": "tuic-in",
       "listen": "::",
-      "listen_port": 61555,
+      "listen_port": {{TUIC_PORT}},
       "users": [
         {
           "uuid": "{{UUID}}"
@@ -148,7 +148,7 @@
       "type": "trojan",
       "tag": "trojan-in",
       "listen": "::",
-      "listen_port": 63333,
+      "listen_port": {{TROJAN_PORT}},
       "users": [
         {
           "password": "{{HYSTERIA_PASSWORD}}"
