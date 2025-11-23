@@ -175,6 +175,133 @@ check_and_start_systemd_resolved() {
 # 端口和密码生成函数
 # =============================================================================
 
+# 检查端口是否被非 sing-box 进程占用
+is_port_occupied_by_others() {
+    local port="$1"
+
+    # 检查端口是否被占用
+    if ! lsof -i:"$port" >/dev/null 2>&1; then
+        # 端口未被占用
+        return 1
+    fi
+
+    # 端口被占用，检查是否是 sing-box 进程
+    local process_info=$(lsof -i:"$port" -t 2>/dev/null)
+
+    if [[ -z "$process_info" ]]; then
+        # 无法获取进程信息，认为端口可用
+        return 1
+    fi
+
+    # 检查进程名称
+    for pid in $process_info; do
+        local process_name=$(ps -p "$pid" -o comm= 2>/dev/null)
+        if [[ "$process_name" != *"sing-box"* ]]; then
+            # 被非 sing-box 进程占用
+            return 0
+        fi
+    done
+
+    # 只被 sing-box 占用，认为可用（会被重新安装替换）
+    return 1
+}
+
+# 从端口池分配端口（避免重复）
+allocate_port_from_pool() {
+    local protocol="$1"
+
+    # 检查协议是否存在于端口池
+    if [[ -z "${PORT_POOL[$protocol]}" ]]; then
+        log_error "未知的协议类型: $protocol"
+        return 1
+    fi
+
+    local base_port="${PORT_POOL[$protocol]}"
+
+    # 检查该端口是否已被分配
+    for allocated in "${ALLOCATED_PORTS[@]}"; do
+        if [[ "$allocated" == "$base_port" ]]; then
+            log_error "端口 $base_port 已被分配给其他协议"
+            return 1
+        fi
+    done
+
+    # 检查端口是否被非 sing-box 进程占用
+    if is_port_occupied_by_others "$base_port"; then
+        log_error "端口 $base_port 已被其他程序占用"
+        return 1
+    fi
+
+    # 分配端口
+    ALLOCATED_PORTS+=("$base_port")
+    echo "$base_port"
+    return 0
+}
+
+# NAT模式：从用户指定范围分配端口（VLESS_CDN除外）
+allocate_port_from_nat_range() {
+    local protocol="$1"
+    local start_port="$2"
+    local end_port="$3"
+
+    # VLESS_CDN 始终使用端口池中的固定端口
+    if [[ "$protocol" == "VLESS_CDN" ]]; then
+        if [[ -z "${PORT_POOL[$protocol]}" ]]; then
+            log_error "端口池中未找到 VLESS_CDN 端口"
+            return 1
+        fi
+        echo "${PORT_POOL[$protocol]}"
+        return 0
+    fi
+
+    # 验证端口范围
+    if [[ ! "$start_port" =~ ^[0-9]+$ ]] || [[ ! "$end_port" =~ ^[0-9]+$ ]]; then
+        log_error "无效的端口范围: $start_port-$end_port"
+        return 1
+    fi
+
+    if (( start_port > end_port )); then
+        log_error "起始端口不能大于结束端口"
+        return 1
+    fi
+
+    # 尝试从范围内分配可用端口
+    local attempts=0
+    local max_attempts=$((end_port - start_port + 1))
+
+    while (( attempts < max_attempts )); do
+        # 随机选择一个端口
+        local port=$((start_port + (RANDOM % (end_port - start_port + 1))))
+
+        # 检查是否已被分配
+        local already_allocated=0
+        for allocated in "${ALLOCATED_PORTS[@]}"; do
+            if [[ "$allocated" == "$port" ]]; then
+                already_allocated=1
+                break
+            fi
+        done
+
+        if (( already_allocated == 1 )); then
+            ((attempts++))
+            continue
+        fi
+
+        # 检查端口是否被非 sing-box 进程占用
+        if ! is_port_occupied_by_others "$port"; then
+            # 端口可用（未占用或仅被 sing-box 占用）
+            ALLOCATED_PORTS+=("$port")
+            echo "$port"
+            return 0
+        fi
+
+        ((attempts++))
+    done
+
+    log_error "无法在范围 $start_port-$end_port 内找到可用端口（排除 sing-box 占用的端口）"
+    return 1
+}
+
 # 获取可用端口
 get_available_port() {
     local start_range="$1"
@@ -703,54 +830,74 @@ generate_qr_codes() {
     local optimal_ip
     optimal_ip=$(get_optimal_ip)
     
-    # 生成主要协议的二维码
-    local reality_link="vless://${UUID}@${optimal_ip}:${VLESS_PORT}?security=reality&flow=xtls-rprx-vision&type=tcp&sni=${SERVER}&fp=chrome&pbk=Y_-yCHC3Qi-Kz6OWpueQckAJSQuGEKffwWp8MlFgwTs&sid=0123456789abcded&encryption=none#Reality"
-    local hy2_link="hysteria2://${HYSTERIA_PASSWORD}@${optimal_ip}:${HYSTERIA_PORT}?insecure=1&alpn=h3&sni=bing.com#Hysteria2"
-    local trojan_link="trojan://${HYSTERIA_PASSWORD}@${optimal_ip}:63333?sni=bing.com&type=ws&path=%2Ftrojan&host=bing.com&allowInsecure=1&udp=true&alpn=http%2F1.1#Trojan"
-    local tuic_link="tuic://${UUID}:@${optimal_ip}:61555?alpn=h3&allow_insecure=1&congestion_control=bbr#TUIC"
-    
     echo ""
     print_colored "$BLUE" "=============== 二维码生成 ==============="
     echo ""
     
-    print_info "🔷 Reality 二维码:"
-    qrencode -t ANSIUTF8 "$reality_link" 2>/dev/null || echo "二维码生成失败"
-    echo ""
-    
-    print_info "🚀 Hysteria2 二维码:"
-    qrencode -t ANSIUTF8 "$hy2_link" 2>/dev/null || echo "二维码生成失败"
-    echo ""
-    
-    print_info "🛡️ Trojan 二维码:"
-    qrencode -t ANSIUTF8 "$trojan_link" 2>/dev/null || echo "二维码生成失败"
-    echo ""
-    
-    print_info "⚡ TUIC 二维码:"
-    qrencode -t ANSIUTF8 "$tuic_link" 2>/dev/null || echo "二维码生成失败"
-    echo ""
-    
-    # ShadowTLS v3 + SS2022 二维码
-    if [[ -f /tmp/ss2022_link.tmp ]]; then
-        local ss2022_link
-        ss2022_link=$(cat /tmp/ss2022_link.tmp 2>/dev/null)
-        if [[ -n "$ss2022_link" ]]; then
-            print_info "🔐 ShadowTLS v3 + SS2022 二维码:"
-            qrencode -t ANSIUTF8 "$ss2022_link" 2>/dev/null || echo "二维码生成失败"
+    # 如果是WARP IP，只显示IPv6相关二维码
+    if is_warp_ipv4; then
+        echo "🌐 检测到 WARP 网络，仅显示 IPv6 优化节点二维码"
+        echo ""
+        
+        # IPv6二维码（如果有域名）
+        if [[ "$IS_IPV6" == true && -n "$DOMAIN_NAME" ]]; then
+            local ipv6_link="vless://${UUID}@${DOMAIN_NAME}:443?encryption=none&security=tls&type=ws&host=${DOMAIN_NAME}&sni=${DOMAIN_NAME}&path=%2Fvless#IPv6节点"
+            
+            print_info "🌐 IPv6 节点二维码:"
+            qrencode -t ANSIUTF8 "$ipv6_link" 2>/dev/null || echo "二维码生成失败"
+            echo ""
+        else
+            echo "⚠️  需要配置 IPv6 域名才能生成二维码"
             echo ""
         fi
-        rm -f /tmp/ss2022_link.tmp
-    fi
-    
-    # SS专线二维码
-    if [[ -f /tmp/ss_link.tmp ]]; then
-        local ss_link
-        ss_link=$(cat /tmp/ss_link.tmp 2>/dev/null)
-        if [[ -n "$ss_link" ]]; then
-            print_info "📡 SS专线 二维码:"
-            qrencode -t ANSIUTF8 "$ss_link" 2>/dev/null || echo "二维码生成失败"
-            echo ""
+    else
+        # 非WARP网络，显示所有二维码
+        
+        # 生成主要协议的二维码
+        local reality_link="vless://${UUID}@${optimal_ip}:${VLESS_PORT}?security=reality&flow=xtls-rprx-vision&type=tcp&sni=${SERVER}&fp=chrome&pbk=Y_-yCHC3Qi-Kz6OWpueQckAJSQuGEKffwWp8MlFgwTs&sid=0123456789abcded&encryption=none#Reality"
+        local hy2_link="hysteria2://${HYSTERIA_PASSWORD}@${optimal_ip}:${HYSTERIA_PORT}?insecure=1&alpn=h3&sni=bing.com#Hysteria2"
+        local trojan_link="trojan://${HYSTERIA_PASSWORD}@${optimal_ip}:63333?sni=bing.com&type=ws&path=%2Ftrojan&host=bing.com&allowInsecure=1&udp=true&alpn=http%2F1.1#Trojan"
+        local tuic_link="tuic://${UUID}:@${optimal_ip}:61555?alpn=h3&allow_insecure=1&congestion_control=bbr#TUIC"
+        
+        print_info "🔷 Reality 二维码:"
+        qrencode -t ANSIUTF8 "$reality_link" 2>/dev/null || echo "二维码生成失败"
+        echo ""
+        
+        print_info "🚀 Hysteria2 二维码:"
+        qrencode -t ANSIUTF8 "$hy2_link" 2>/dev/null || echo "二维码生成失败"
+        echo ""
+        
+        print_info "🛡️ Trojan 二维码:"
+        qrencode -t ANSIUTF8 "$trojan_link" 2>/dev/null || echo "二维码生成失败"
+        echo ""
+        
+        print_info "⚡ TUIC 二维码:"
+        qrencode -t ANSIUTF8 "$tuic_link" 2>/dev/null || echo "二维码生成失败"
+        echo ""
+        
+        # ShadowTLS v3 + SS2022 二维码
+        if [[ -f /tmp/ss2022_link.tmp ]]; then
+            local ss2022_link
+            ss2022_link=$(cat /tmp/ss2022_link.tmp 2>/dev/null)
+            if [[ -n "$ss2022_link" ]]; then
+                print_info "🔐 ShadowTLS v3 + SS2022 二维码:"
+                qrencode -t ANSIUTF8 "$ss2022_link" 2>/dev/null || echo "二维码生成失败"
+                echo ""
+            fi
+            rm -f /tmp/ss2022_link.tmp
         fi
-        rm -f /tmp/ss_link.tmp
+        
+        # SS专线二维码
+        if [[ -f /tmp/ss_link.tmp ]]; then
+            local ss_link
+            ss_link=$(cat /tmp/ss_link.tmp 2>/dev/null)
+            if [[ -n "$ss_link" ]]; then
+                print_info "📡 SS专线 二维码:"
+                qrencode -t ANSIUTF8 "$ss_link" 2>/dev/null || echo "二维码生成失败"
+                echo ""
+            fi
+            rm -f /tmp/ss_link.tmp
+        fi
     fi
     
     print_colored "$BLUE" "======================================="

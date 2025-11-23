@@ -178,20 +178,20 @@ initialize() {
         return 1
     }
     
-    # 获取可用端口（使用配置文件中的范围）
-    log_info "分配可用端口..."
-    VLESS_PORT=$(get_available_port "$DEFAULT_VLESS_PORT_MIN" "$DEFAULT_VLESS_PORT_MAX" 2>>"$LOG_FILE") || {
-        log_error "获取VLESS端口失败"
+    # 从端口池分配端口（避免重复）
+    log_info "从端口池分配可用端口..."
+    VLESS_PORT=$(allocate_port_from_pool "VLESS" 2>>"$LOG_FILE") || {
+        log_error "从端口池获取VLESS端口失败"
         return 1
     }
-    
-    SS_PORT=$(get_available_port "$DEFAULT_SS_PORT_MIN" "$DEFAULT_SS_PORT_MAX" 2>>"$LOG_FILE") || {
-        log_error "获取SS端口失败"  
+
+    SS_PORT=$(allocate_port_from_pool "SS" 2>>"$LOG_FILE") || {
+        log_error "从端口池获取SS端口失败"
         return 1
     }
-    
-    HYSTERIA_PORT=$(get_available_port "$DEFAULT_HYSTERIA_PORT_MIN" "$DEFAULT_HYSTERIA_PORT_MAX" 2>>"$LOG_FILE") || {
-        log_error "获取Hysteria端口失败"
+
+    HYSTERIA_PORT=$(allocate_port_from_pool "HYSTERIA" 2>>"$LOG_FILE") || {
+        log_error "从端口池获取Hysteria端口失败"
         return 1
     }
     
@@ -553,13 +553,14 @@ show_main_menu() {
     echo ""
     print_colored "$BLUE" "========== Sing-Box 管理面板 =========="
     echo "1. 全新安装部署"
-    echo "2. 重新生成配置"
-    echo "3. 显示连接信息"
-    echo "4. 重启服务"
-    echo "5. 停止服务"
-    echo "6. 查看服务状态"
-    echo "7. 查看实时日志"
-    echo "8. 卸载服务"
+    echo "2. 全新安装部署(NAT)"
+    echo "3. 重新生成配置"
+    echo "4. 显示连接信息"
+    echo "5. 重启服务"
+    echo "6. 停止服务"
+    echo "7. 查看服务状态"
+    echo "8. 查看实时日志"
+    echo "9. 卸载服务"
     echo "0. 退出"
     print_colored "$BLUE" "====================================="
 }
@@ -567,30 +568,33 @@ show_main_menu() {
 # 处理菜单选择
 handle_menu_choice() {
     local choice="$1"
-    
+
     case "$choice" in
         1)
             deploy_fresh_install
             ;;
         2)
-            regenerate_config
+            deploy_nat_install
             ;;
         3)
-            show_connection_info
+            regenerate_config
             ;;
         4)
-            restart_service
+            show_connection_info
             ;;
         5)
-            stop_service
+            restart_service
             ;;
         6)
-            show_service_status
+            stop_service
             ;;
         7)
-            show_realtime_logs
+            show_service_status
             ;;
         8)
+            show_realtime_logs
+            ;;
+        9)
             uninstall_service
             ;;
         0)
@@ -610,39 +614,212 @@ handle_menu_choice() {
 # 全新安装部署
 deploy_fresh_install() {
     log_info "开始全新安装部署..."
-    
+
     # 系统检查
     check_root || error_exit "Root权限检查失败"
     check_system || error_exit "系统兼容性检查失败"
     check_network || error_exit "网络连接检查失败"
-    
+
     # 初始化
     if ! initialize; then
         error_exit "初始化失败"
     fi
-    
+
     # 网络和安全配置
     #change_ssh_port || log_warn "SSH端口配置可能失败"
     detect_ip_and_setup || error_exit "IP地址检测和配置失败"
     #setup_fail2ban || log_warn "fail2ban配置失败，但不影响主要功能"
-    
+
     # 软件安装和配置
     install_singbox || error_exit "Sing-Box安装失败"
     generate_server_config || error_exit "服务器配置生成失败"
     generate_client_config_file || error_exit "客户端配置生成失败"
-    
+
     # 启动服务
     start_http_server || log_warn "HTTP服务启动可能失败"
     enable_and_start_service || error_exit "Sing-Box服务启动失败"
-    
+
     # 网络优化
     enable_bbr || log_warn "BBR启用可能失败"
     optimize_network || log_warn "网络优化可能失败"
-    
+
     # 显示结果
     show_deployment_results
-    
+
     print_success "========== 部署完成 =========="
+}
+
+# NAT模式初始化（使用用户指定的端口范围）
+initialize_nat() {
+    local start_port="$1"
+    local end_port="$2"
+
+    log_info "NAT模式初始化..."
+
+    # 创建必要的目录
+    mkdir -p "$CONFIG_DIR" "$LOG_DIR" "$TEMP_DIR" || {
+        echo "无法创建必要的目录"
+        return 1
+    }
+
+    # 初始化日志
+    touch "$LOG_FILE" || {
+        echo "无法创建日志文件: $LOG_FILE"
+        return 1
+    }
+
+    # 生成随机参数
+    log_info "生成随机参数..."
+    RANDOM_STR="racknerd" || {
+        log_error "生成随机字符串失败"
+        return 1
+    }
+
+    HYSTERIA_PASSWORD=$(generate_strong_password 15) || {
+        log_error "生成密码失败"
+        return 1
+    }
+
+    # 从用户指定范围分配端口（VLESS_CDN除外）
+    log_info "从端口范围 $start_port-$end_port 分配端口..."
+    VLESS_PORT=$(allocate_port_from_nat_range "VLESS" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
+        log_error "从NAT范围获取VLESS端口失败"
+        return 1
+    }
+
+    SS_PORT=$(allocate_port_from_nat_range "SS" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
+        log_error "从NAT范围获取SS端口失败"
+        return 1
+    }
+
+    HYSTERIA_PORT=$(allocate_port_from_nat_range "HYSTERIA" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
+        log_error "从NAT范围获取Hysteria端口失败"
+        return 1
+    }
+
+    # VLESS_CDN 使用端口池固定端口
+    VLESS_CDN_PORT=$(allocate_port_from_nat_range "VLESS_CDN" "$start_port" "$end_port" 2>>"$LOG_FILE") || {
+        log_error "获取VLESS_CDN端口失败"
+        return 1
+    }
+
+    log_info "NAT模式初始化完成"
+    log_info "VLESS端口: $VLESS_PORT"
+    log_info "SS端口: $SS_PORT"
+    log_info "Hysteria端口: $HYSTERIA_PORT"
+    log_info "VLESS_CDN端口: $VLESS_CDN_PORT (固定)"
+
+    return 0
+}
+
+# NAT模式全新安装部署
+deploy_nat_install() {
+    log_info "开始NAT模式安装部署..."
+
+    # 系统检查
+    check_root || error_exit "Root权限检查失败"
+    check_system || error_exit "系统兼容性检查失败"
+    check_network || error_exit "网络连接检查失败"
+
+    # 获取用户输入的端口范围
+    echo ""
+    print_colored "$YELLOW" "========== NAT 端口配置 =========="
+    echo "NAT 模式需要为以下协议分配端口："
+    echo "  - VLESS"
+    echo "  - Shadowsocks (SS)"
+    echo "  - Hysteria"
+    echo ""
+    echo "请输入端口范围（例如：11621-11639）"
+    echo "建议：至少提供 5-10 个端口，以应对某些端口可能被占用的情况"
+    echo ""
+    echo "注意：VLESS_CDN 将使用固定端口 ${PORT_POOL[VLESS_CDN]}，不占用此范围"
+    echo ""
+
+    read -r -p "请输入端口范围: " port_range
+
+    # 验证端口范围格式
+    if [[ ! "$port_range" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+        error_exit "无效的端口范围格式，请使用格式：起始端口-结束端口（例如：11621-11639）"
+    fi
+
+    local start_port="${BASH_REMATCH[1]}"
+    local end_port="${BASH_REMATCH[2]}"
+
+    # 验证端口范围有效性
+    if (( start_port < 1024 || start_port > 65535 )); then
+        error_exit "起始端口必须在 1024-65535 之间"
+    fi
+
+    if (( end_port < 1024 || end_port > 65535 )); then
+        error_exit "结束端口必须在 1024-65535 之间"
+    fi
+
+    if (( start_port > end_port )); then
+        error_exit "起始端口不能大于结束端口"
+    fi
+
+    # 检查端口范围是否足够（至少需要3个端口）
+    local port_count=$((end_port - start_port + 1))
+    local required_ports=3  # VLESS、SS、Hysteria
+
+    if (( port_count < required_ports )); then
+        error_exit "端口范围太小，至少需要 $required_ports 个端口（VLESS、SS、Hysteria）"
+    fi
+
+    # 检查范围内可用端口数量（排除被非 sing-box 进程占用的）
+    local available_count=0
+    local singbox_occupied=0
+    for ((port=start_port; port<=end_port; port++)); do
+        if ! is_port_occupied_by_others "$port"; then
+            ((available_count++))
+        else
+            # 被其他程序占用
+            :
+        fi
+
+        # 统计被 sing-box 占用的端口（用于提示）
+        if lsof -i:"$port" >/dev/null 2>&1 && ! is_port_occupied_by_others "$port"; then
+            ((singbox_occupied++))
+        fi
+    done
+
+    if (( singbox_occupied > 0 )); then
+        log_info "检测到 $singbox_occupied 个端口正被 sing-box 使用，重新安装时会自动释放"
+    fi
+
+    log_info "端口范围: $start_port-$end_port (总共 $port_count 个，可用 $available_count 个)"
+
+    if (( available_count < required_ports )); then
+        error_exit "端口范围内可用端口不足！需要 $required_ports 个，但只有 $available_count 个可用。请扩大端口范围或释放被其他程序占用的端口。"
+    fi
+
+    log_info "端口范围验证通过"
+
+    # NAT模式初始化
+    if ! initialize_nat "$start_port" "$end_port"; then
+        error_exit "NAT模式初始化失败"
+    fi
+
+    # 网络和安全配置
+    detect_ip_and_setup || error_exit "IP地址检测和配置失败"
+
+    # 软件安装和配置
+    install_singbox || error_exit "Sing-Box安装失败"
+    generate_server_config || error_exit "服务器配置生成失败"
+    generate_client_config_file || error_exit "客户端配置生成失败"
+
+    # 启动服务
+    start_http_server || log_warn "HTTP服务启动可能失败"
+    enable_and_start_service || error_exit "Sing-Box服务启动失败"
+
+    # 网络优化
+    enable_bbr || log_warn "BBR启用可能失败"
+    optimize_network || log_warn "网络优化可能失败"
+
+    # 显示结果
+    show_deployment_results
+
+    print_success "========== NAT模式部署完成 =========="
 }
 
 # 重新生成配置
@@ -807,18 +984,8 @@ create_defaults_conf() {
 # 端口配置
 readonly DEFAULT_DOWNLOAD_PORT=14567
 readonly DEFAULT_SS_PORT=443
-readonly DEFAULT_VLESS_PORT_MIN=20000
-readonly DEFAULT_VLESS_PORT_MAX=20010
-readonly DEFAULT_HYSTERIA_PORT_MIN=50000
-readonly DEFAULT_HYSTERIA_PORT_MAX=50010
-readonly DEFAULT_SS_PORT_MIN=31000
-readonly DEFAULT_SS_PORT_MAX=31010
 
-# 固定端口
-readonly TROJAN_PORT=63333
-readonly TUIC_PORT=61555
-readonly SS_DIRECT_PORT=59000
-readonly VLESS_CDN_PORT=4433
+# 端口池配置已移至 defaults.conf 统一管理
 
 # 网络配置
 readonly NETWORK_TIMEOUT=10

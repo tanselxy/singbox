@@ -577,53 +577,69 @@ generate_proxy_links() {
     print_colored "$RED" "=================== 代理链接汇总 ==================="
     echo ""
     
-    # 1. Reality链接
-    local reality_link="vless://${UUID}@${optimal_ip}:${VLESS_PORT}?security=reality&flow=xtls-rprx-vision&type=tcp&sni=${SERVER}&fp=chrome&pbk=Y_-yCHC3Qi-Kz6OWpueQckAJSQuGEKffwWp8MlFgwTs&sid=0123456789abcded&encryption=none#Reality"
-    echo "🔷 Reality (VLESS) 链接:"
-    echo "$reality_link"
-    echo ""
-    
-    # 2. Hysteria2链接
-    local hy2_link="hysteria2://${HYSTERIA_PASSWORD}@${optimal_ip}:${HYSTERIA_PORT}?insecure=1&alpn=h3&sni=bing.com#Hysteria2"
-    echo "🚀 Hysteria2 链接:"
-    echo "$hy2_link"
-    echo ""
-    
-    # 3. Trojan链接
-    local trojan_link="trojan://${HYSTERIA_PASSWORD}@${optimal_ip}:63333?sni=bing.com&type=ws&path=%2Ftrojan&host=bing.com&allowInsecure=1&udp=true&alpn=http%2F1.1#Trojan"
-    echo "🛡️ Trojan WS 链接:"
-    echo "$trojan_link"
-    echo ""
-    
-    # 4. TUIC链接
-    local tuic_link="tuic://${UUID}:@${optimal_ip}:61555?alpn=h3&allow_insecure=1&congestion_control=bbr#TUIC"
-    echo "⚡ TUIC 链接:"
-    echo "$tuic_link"
-    echo ""
-    
-    # 5. ShadowTLS + SS2022链接
-    if [[ -n "$SS_PASSWORD" ]]; then
-        generate_ss2022_link "$SS_PASSWORD"
-    else
-        log_warn "SS密码未找到，跳过ShadowTLS链接生成"
-    fi
-    echo ""
-    
-    # 6. SS专线链接
-    local ss_encoded
-    ss_encoded=$(echo -n "aes-128-gcm:${HYSTERIA_PASSWORD}" | base64 2>/dev/null | tr -d '\n')
-    local ss_link="ss://${ss_encoded}@${optimal_ip}:59000#SS专线"
-    echo "📡 SS 专线链接:"
-    echo "$ss_link"
-    echo ""
-    
-    # 保存SS专线链接供二维码使用
-    echo "$ss_link" > /tmp/ss_link.tmp
-    
-    # 7. IPv6链接（如果有域名）
-    if [[ "$IS_IPV6" == true && -n "$DOMAIN_NAME" ]]; then
-        generate_ipv6_link
+    # 如果是WARP IP，只显示IPv6相关链接
+    if is_warp_ipv4; then
+        echo "🌐 检测到 WARP 网络，仅显示 IPv6 优化节点链接"
         echo ""
+        
+        # IPv6链接（如果有域名）
+        if [[ "$IS_IPV6" == true && -n "$DOMAIN_NAME" ]]; then
+            generate_ipv6_link
+        else
+            echo "⚠️  需要配置 IPv6 域名才能使用 WARP 网络"
+        fi
+        echo ""
+    else
+        # 非WARP网络，显示所有链接
+        
+        # 1. Reality链接
+        local reality_link="vless://${UUID}@${optimal_ip}:${VLESS_PORT}?security=reality&flow=xtls-rprx-vision&type=tcp&sni=${SERVER}&fp=chrome&pbk=Y_-yCHC3Qi-Kz6OWpueQckAJSQuGEKffwWp8MlFgwTs&sid=0123456789abcded&encryption=none#Reality"
+        echo "🔷 Reality (VLESS) 链接:"
+        echo "$reality_link"
+        echo ""
+        
+        # 2. Hysteria2链接
+        local hy2_link="hysteria2://${HYSTERIA_PASSWORD}@${optimal_ip}:${HYSTERIA_PORT}?insecure=1&alpn=h3&sni=bing.com#Hysteria2"
+        echo "🚀 Hysteria2 链接:"
+        echo "$hy2_link"
+        echo ""
+        
+        # 3. Trojan链接
+        local trojan_link="trojan://${HYSTERIA_PASSWORD}@${optimal_ip}:63333?sni=bing.com&type=ws&path=%2Ftrojan&host=bing.com&allowInsecure=1&udp=true&alpn=http%2F1.1#Trojan"
+        echo "🛡️ Trojan WS 链接:"
+        echo "$trojan_link"
+        echo ""
+        
+        # 4. TUIC链接
+        local tuic_link="tuic://${UUID}:@${optimal_ip}:61555?alpn=h3&allow_insecure=1&congestion_control=bbr#TUIC"
+        echo "⚡ TUIC 链接:"
+        echo "$tuic_link"
+        echo ""
+        
+        # 5. ShadowTLS + SS2022链接
+        if [[ -n "$SS_PASSWORD" ]]; then
+            generate_ss2022_link "$SS_PASSWORD"
+        else
+            log_warn "SS密码未找到，跳过ShadowTLS链接生成"
+        fi
+        echo ""
+        
+        # 6. SS专线链接
+        local ss_encoded
+        ss_encoded=$(echo -n "aes-128-gcm:${HYSTERIA_PASSWORD}" | base64 2>/dev/null | tr -d '\n')
+        local ss_link="ss://${ss_encoded}@${optimal_ip}:59000#SS专线"
+        echo "📡 SS 专线链接:"
+        echo "$ss_link"
+        echo ""
+        
+        # 保存SS专线链接供二维码使用
+        echo "$ss_link" > /tmp/ss_link.tmp
+        
+        # 7. IPv6链接（如果有域名）
+        if [[ "$IS_IPV6" == true && -n "$DOMAIN_NAME" ]]; then
+            generate_ipv6_link
+            echo ""
+        fi
     fi
     
     print_colored "$RED" "=============================================="
