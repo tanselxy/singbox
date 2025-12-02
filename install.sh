@@ -211,7 +211,7 @@ initialize() {
 install_singbox() {
     #log_info "更新系统软件包,请耐心等待1-2分钟..."
     export DEBIAN_FRONTEND=noninteractive
-    
+
     # case "$PACKAGE_MANAGER" in
     #     "apt")
     #         apt-get update >/dev/null 2>&1
@@ -220,16 +220,44 @@ install_singbox() {
     #         $PACKAGE_MANAGER update -y >/dev/null 2>&1
     #         ;;
     # esac
-    
+
+    # 检查并安装 sudo（官方安装脚本需要）
+    if ! command -v sudo >/dev/null 2>&1; then
+        log_info "检测到系统未安装 sudo，正在安装..."
+        case "$PACKAGE_MANAGER" in
+            "apt")
+                apt-get update >/dev/null 2>&1
+                apt-get install -y sudo >/dev/null 2>&1 || log_warn "sudo 安装失败，但可能不影响安装"
+                ;;
+            "yum"|"dnf")
+                $PACKAGE_MANAGER install -y sudo >/dev/null 2>&1 || log_warn "sudo 安装失败，但可能不影响安装"
+                ;;
+        esac
+
+        if command -v sudo >/dev/null 2>&1; then
+            log_info "sudo 安装成功"
+        fi
+    fi
+
     log_info "设置系统时区为上海..."
     timedatectl set-timezone Asia/Shanghai 2>/dev/null || true
-    
+
     log_info "安装 Sing-Box..."
-    
+
+    # 智能选择 IPv4/IPv6
+    local curl_ip_flag=""
+    if [[ "$IS_IPV6" == "true" ]]; then
+        log_info "检测到纯 IPv6 环境，使用 IPv6 协议"
+        curl_ip_flag="-6"
+    else
+        log_info "检测到 IPv4 环境，使用 IPv4 协议"
+        curl_ip_flag="-4"
+    fi
+
     # 根据系统选择安装方式
     case "$PACKAGE_MANAGER" in
         "apt")
-            if ! curl -fsSL https://sing-box.app/deb-install.sh | bash; then
+            if ! curl $curl_ip_flag -fsSL https://sing-box.app/deb-install.sh | bash; then
                 error_exit "Sing-Box 安装失败"
             fi
             ;;
@@ -238,7 +266,7 @@ install_singbox() {
             install_singbox_manual
             ;;
     esac
-    
+
     install_self_signed_cert
 }
 
@@ -256,40 +284,48 @@ install_singbox_manual() {
         *) error_exit "不支持的架构: $arch" ;;
     esac
     
+    # 智能选择 IPv4/IPv6
+    local curl_ip_flag=""
+    if [[ "$IS_IPV6" == "true" ]]; then
+        curl_ip_flag="-6"
+    else
+        curl_ip_flag="-4"
+    fi
+
     # 获取最新版本
     log_info "获取最新版本信息..."
     local latest_version
-    latest_version=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep -oP '"tag_name": "\K[^"]+' 2>/dev/null || echo "v1.8.0")
-    
+    latest_version=$(curl $curl_ip_flag -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep -oP '"tag_name": "\K[^"]+' 2>/dev/null || echo "v1.8.0")
+
     log_info "下载 Sing-Box $latest_version ($arch)..."
-    
+
     # 确保在临时目录
     cd "$TEMP_DIR" || error_exit "无法切换到临时目录"
-    
+
     # 下载URL
     local download_url="https://github.com/SagerNet/sing-box/releases/download/$latest_version/sing-box-${latest_version#v}-linux-$arch.tar.gz"
-    
+
     # 尝试多个下载源
     local downloaded=false
-    
+
     # 源1: GitHub 直接下载
-    if curl -L -o "sing-box.tar.gz" "$download_url" 2>/dev/null; then
+    if curl $curl_ip_flag -L -o "sing-box.tar.gz" "$download_url" 2>/dev/null; then
         downloaded=true
         log_info "从 GitHub 下载成功"
     else
         log_warn "GitHub 下载失败，尝试镜像源..."
-        
+
         # 源2: GitHub 代理
         local proxy_url="https://ghproxy.com/https://github.com/SagerNet/sing-box/releases/download/$latest_version/sing-box-${latest_version#v}-linux-$arch.tar.gz"
-        if curl -L -o "sing-box.tar.gz" "$proxy_url" 2>/dev/null; then
+        if curl $curl_ip_flag -L -o "sing-box.tar.gz" "$proxy_url" 2>/dev/null; then
             downloaded=true
             log_info "从代理源下载成功"
         else
             log_warn "代理源下载失败，尝试备用版本..."
-            
+
             # 源3: 固定版本下载
             local backup_url="https://github.com/SagerNet/sing-box/releases/download/v1.8.0/sing-box-1.8.0-linux-$arch.tar.gz"
-            if curl -L -o "sing-box.tar.gz" "$backup_url" 2>/dev/null; then
+            if curl $curl_ip_flag -L -o "sing-box.tar.gz" "$backup_url" 2>/dev/null; then
                 downloaded=true
                 log_info "从备用源下载成功"
             fi
