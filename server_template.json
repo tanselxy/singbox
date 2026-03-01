@@ -7,25 +7,21 @@
   "dns": {
     "servers": [
       {
-        "type": "https",
-        "tag": "local",
-        "server": "1.1.1.1",
-        "server_port": 443,
-        "detour": "direct"
+      "type": "https",
+      "tag": "local",
+      "server": "1.1.1.1",
+      "server_port": 443,
+      "detour": "direct"
       },
       {
-        "type": "udp",  
+        "type": "udp",
         "tag": "local-temp",
         "server": "2001:4860:4860::8888",
         "detour": "direct"
       },
       {
-        "tag": "block",
-        "address": "rcode://success"
-      },
-      {
-        "tag": "system",
-        "address": "local"
+        "type": "local",
+        "tag": "system"
       }
     ],
     "rules": [
@@ -35,8 +31,8 @@
       },
       {
         "rule_set": ["category-ads-all"],
-        "server": "block",
-        "disable_cache": true
+        "action": "predefined",
+        "rcode": "NXDOMAIN"
       }
     ],
     "final": "local",

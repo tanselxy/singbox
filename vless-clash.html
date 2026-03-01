@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>节点转换工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        .convert-box {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-convert {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-convert:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-copy {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-copy:hover {
+            background: #059669;
+        }
+
+        .btn-clear {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-clear:hover {
+            background: #dc2626;
+        }
+
+        .info {
+            background: #f0f9ff;
+            border-left: 4px solid #3b82f6;
+            padding: 12px;
+            margin-top: 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #1e40af;
+        }
+
+        .error {
+            background: #fef2f2;
+            border-left: 4px solid #ef4444;
+            padding: 12px;
+            margin-top: 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #991b1b;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🚀 节点配置转换工具</h1>
+
+        <div class="convert-box">
+            <label>输入节点链接（支持vless、vmess、trojan等）</label>
+            <textarea id="input" placeholder="粘贴节点链接，例如：vless://..."></textarea>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn-convert" onclick="convert()">转换为 Clash</button>
+            <button class="btn-copy" onclick="copyResult()">复制结果</button>
+            <button class="btn-clear" onclick="clearAll()">清空</button>
+        </div>
+
+        <div class="convert-box">
+            <label>Clash 配置输出</label>
+            <textarea id="output" readonly placeholder="转换结果将显示在这里..."></textarea>
+        </div>
+
+        <div id="message"></div>
+
+        <div class="info">
+            <strong>支持的协议：</strong>vless (reality/tls), vmess, trojan<br>
+            <strong>使用方法：</strong>粘贴节点链接 → 点击转换 → 复制结果到Clash配置文件
+        </div>
+    </div>
+
+    <script>
+        function parseVless(url) {
+            const urlObj = new URL(url);
+            const uuid = urlObj.username;
+            const server = urlObj.hostname;
+            const port = urlObj.port;
+            const params = new URLSearchParams(urlObj.search);
+            const name = decodeURIComponent(urlObj.hash.substring(1)) || 'VLESS节点';
+
+            const config = {
+                name: name,
+                type: 'vless',
+                server: server,
+                port: parseInt(port),
+                uuid: uuid,
+                network: params.get('type') || 'tcp',
+                tls: params.get('security') === 'tls' || params.get('security') === 'reality',
+                udp: true
+            };
+
+            // 处理 flow
+            if (params.get('flow')) {
+                config.flow = params.get('flow');
+            }
+
+            // 处理 SNI
+            if (params.get('sni')) {
+                config.servername = params.get('sni');
+            }
+
+            // 处理 fingerprint
+            if (params.get('fp')) {
+                config['client-fingerprint'] = params.get('fp');
+            }
+
+            // 处理 Reality
+            if (params.get('security') === 'reality') {
+                config['reality-opts'] = {};
+                if (params.get('pbk')) {
+                    config['reality-opts']['public-key'] = params.get('pbk');
+                }
+                if (params.get('sid')) {
+                    config['reality-opts']['short-id'] = params.get('sid');
+                }
+            }
+
+            // 处理 WebSocket
+            if (params.get('type') === 'ws') {
+                config['ws-opts'] = {};
+                if (params.get('path')) {
+                    config['ws-opts'].path = params.get('path');
+                }
+                if (params.get('host')) {
+                    config['ws-opts'].headers = { Host: params.get('host') };
+                }
+            }
+
+            // 处理 gRPC
+            if (params.get('type') === 'grpc') {
+                config['grpc-opts'] = {};
+                if (params.get('serviceName')) {
+                    config['grpc-opts']['grpc-service-name'] = params.get('serviceName');
+                }
+            }
+
+            return config;
+        }
+
+        function parseVmess(url) {
+            const base64Data = url.replace('vmess://', '');
+            const jsonStr = atob(base64Data);
+            const vmessObj = JSON.parse(jsonStr);
+
+            const config = {
+                name: vmessObj.ps || 'VMess节点',
+                type: 'vmess',
+                server: vmessObj.add,
+                port: parseInt(vmessObj.port),
+                uuid: vmessObj.id,
+                alterId: parseInt(vmessObj.aid) || 0,
+                cipher: vmessObj.scy || 'auto',
+                udp: true
+            };
+
+            if (vmessObj.tls === 'tls') {
+                config.tls = true;
+                if (vmessObj.sni) {
+                    config.servername = vmessObj.sni;
+                }
+            }
+
+            if (vmessObj.net === 'ws') {
+                config.network = 'ws';
+                config['ws-opts'] = {
+                    path: vmessObj.path || '/'
+                };
+                if (vmessObj.host) {
+                    config['ws-opts'].headers = { Host: vmessObj.host };
+                }
+            }
+
+            return config;
+        }
+
+        function parseTrojan(url) {
+            const urlObj = new URL(url);
+            const password = urlObj.username;
+            const server = urlObj.hostname;
+            const port = urlObj.port;
+            const params = new URLSearchParams(urlObj.search);
+            const name = decodeURIComponent(urlObj.hash.substring(1)) || 'Trojan节点';
+
+            const config = {
+                name: name,
+                type: 'trojan',
+                server: server,
+                port: parseInt(port),
+                password: password,
+                udp: true
+            };
+
+            if (params.get('sni')) {
+                config.sni = params.get('sni');
+            }
+
+            if (params.get('type') === 'ws') {
+                config.network = 'ws';
+                config['ws-opts'] = {};
+                if (params.get('path')) {
+                    config['ws-opts'].path = params.get('path');
+                }
+                if (params.get('host')) {
+                    config['ws-opts'].headers = { Host: params.get('host') };
+                }
+            }
+
+            return config;
+        }
+
+        function toYaml(obj, indent = 0) {
+            let yaml = '';
+            const spaces = '  '.repeat(indent);
+
+            for (const [key, value] of Object.entries(obj)) {
+                if (value === null || value === undefined) continue;
+
+                if (typeof value === 'object' && !Array.isArray(value)) {
+                    yaml += `${spaces}${key}:\n${toYaml(value, indent + 1)}`;
+                } else if (typeof value === 'boolean') {
+                    yaml += `${spaces}${key}: ${value}\n`;
+                } else if (typeof value === 'number') {
+                    yaml += `${spaces}${key}: ${value}\n`;
+                } else {
+                    yaml += `${spaces}${key}: ${value}\n`;
+                }
+            }
+
+            return yaml;
+        }
+
+        function convert() {
+            const input = document.getElementById('input').value.trim();
+            const output = document.getElementById('output');
+            const message = document.getElementById('message');
+
+            if (!input) {
+                showMessage('请输入节点链接', 'error');
+                return;
+            }
+
+            try {
+                let config;
+
+                if (input.startsWith('vless://')) {
+                    config = parseVless(input);
+                } else if (input.startsWith('vmess://')) {
+                    config = parseVmess(input);
+                } else if (input.startsWith('trojan://')) {
+                    config = parseTrojan(input);
+                } else {
+                    throw new Error('不支持的协议类型');
+                }
+
+                const yaml = 'proxies:\n  - ' + toYaml(config, 2).trimStart();
+                output.value = yaml;
+                showMessage('✅ 转换成功！', 'info');
+            } catch (error) {
+                showMessage('❌ 转换失败: ' + error.message, 'error');
+                output.value = '';
+            }
+        }
+
+        function copyResult() {
+            const output = document.getElementById('output');
+            if (!output.value) {
+                showMessage('没有可复制的内容', 'error');
+                return;
+            }
+            output.select();
+            document.execCommand('copy');
+            showMessage('✅ 已复制到剪贴板！', 'info');
+        }
+
+        function clearAll() {
+            document.getElementById('input').value = '';
+            document.getElementById('output').value = '';
+            document.getElementById('message').innerHTML = '';
+        }
+
+        function showMessage(text, type) {
+            const message = document.getElementById('message');
+            message.className = type;
+            message.textContent = text;
+            setTimeout(() => {
+                message.innerHTML = '';
+            }, 3000);
+        }
+
+        // 支持回车键转换
+        document.getElementById('input').addEventListener('keydown', function (e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                convert();
+            }
+        });
+    </script>
+</body>
+</html>
