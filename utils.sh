@@ -935,6 +935,7 @@ schedule_cleanup() {
         rm -f /tmp/singbox_nginx_*.conf 2>/dev/null || true
         rm -f /tmp/singbox_http_*.pid 2>/dev/null || true
     ) &
+    disown
 }
 
 # =============================================================================
