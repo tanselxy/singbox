@@ -168,11 +168,11 @@ initialize() {
     
     # 生成随机参数
     log_info "生成随机参数..."
-    RANDOM_STR="racknerd" || {
+    RANDOM_STR=$(generate_random_string 8) || {
         log_error "生成随机字符串失败"
         return 1
     }
-    
+
     HYSTERIA_PASSWORD=$(generate_strong_password 15) || {
         log_error "生成密码失败"
         return 1
@@ -707,7 +707,7 @@ initialize_nat() {
 
     # 生成随机参数
     log_info "生成随机参数..."
-    RANDOM_STR="racknerd" || {
+    RANDOM_STR=$(generate_random_string 8) || {
         log_error "生成随机字符串失败"
         return 1
     }
