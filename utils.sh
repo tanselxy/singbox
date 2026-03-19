@@ -739,9 +739,7 @@ start_http_server() {
     chmod 755 "$http_dir"
 
     # 复制配置文件到 HTTP 目录
-    if [[ -f "/root/singbox_racknerd.yaml" ]]; then
-        cp /root/singbox_racknerd.yaml "$http_dir/" 2>/dev/null || true
-    fi
+    find /root -maxdepth 1 -name "singbox_*.yaml" -exec cp {} "$http_dir/" \; 2>/dev/null || true
     if [[ -f "/root/client_config.yaml" ]]; then
         cp /root/client_config.yaml "$http_dir/" 2>/dev/null || true
     fi
