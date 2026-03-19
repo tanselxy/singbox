@@ -903,7 +903,7 @@ provide_download_link() {
     print_colored "$RED" "=================== 下载链接 ==================="
     echo ""
     echo "配置文件下载地址:"
-    echo "http://$optimal_ip:$DOWNLOAD_PORT/singbox_racknerd.yaml"
+    echo "http://$optimal_ip:$DOWNLOAD_PORT/singbox_${RANDOM_STR}.yaml"
     echo ""
     print_colored "$RED" "=============================================="
     echo ""
