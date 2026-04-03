@@ -162,8 +162,6 @@
       }
     },
     {
-      "sniff": true,
-      "sniff_override_destination": true,
       "type": "hysteria2",
       "tag": "hy2-in",
       "listen": "::",
