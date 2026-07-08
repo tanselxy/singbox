@@ -1,0 +1,22 @@
+# Build output
+/dist/
+/bin/
+singbox-panel
+*.exe
+
+# Go
+*.test
+*.out
+/vendor/
+
+# Local data / runtime
+*.db
+*.db-journal
+*.sqlite
+*.log
+/etc-sing-box-local/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
