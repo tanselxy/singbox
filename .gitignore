@@ -1,7 +1,7 @@
-# Build output
+# Build output (anchored so it does not match the cmd/singbox-panel/ source dir)
 /dist/
 /bin/
-singbox-panel
+/singbox-panel
 *.exe
 
 # Go

@@ -14,9 +14,11 @@ import (
 	"github.com/tanselxy/singbox/internal/config"
 	"github.com/tanselxy/singbox/internal/model"
 	"github.com/tanselxy/singbox/internal/network"
+	"github.com/tanselxy/singbox/internal/panel"
 	"github.com/tanselxy/singbox/internal/protocol"
 	"github.com/tanselxy/singbox/internal/secret"
 	"github.com/tanselxy/singbox/internal/singbox"
+	"github.com/tanselxy/singbox/internal/state"
 	"github.com/tanselxy/singbox/internal/system"
 )
 
@@ -46,6 +48,11 @@ type Result struct {
 	Deployment model.Deployment
 	Links      []model.Link
 	ConfigPath string
+
+	// Panel access details. PanelPassword is only set the first time the panel
+	// is configured (shown once); it is empty on subsequent installs.
+	PanelURL      string
+	PanelPassword string
 }
 
 // Run performs the deployment described by opts.
@@ -72,6 +79,14 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	if err := deploy(ctx, opts, dep, cfg); err != nil {
+		return nil, err
+	}
+	// Persist the deployment so the web panel can render nodes without
+	// re-deriving them from config.json.
+	if err := state.Save(dep); err != nil {
+		return nil, err
+	}
+	if err := setupPanel(ctx, dep, res); err != nil {
 		return nil, err
 	}
 	res.ConfigPath = singbox.ConfigPath
@@ -156,6 +171,31 @@ func deploy(ctx context.Context, opts Options, dep model.Deployment, cfg []byte)
 	if !singbox.IsActive(ctx) {
 		return fmt.Errorf("sing-box 启动后未处于 active 状态，请查看 journalctl -u sing-box")
 	}
+	return nil
+}
+
+// setupPanel bootstraps the panel config, installs its systemd unit so it is
+// resident, and records the access URL (and first-run password) in res.
+func setupPanel(ctx context.Context, dep model.Deployment, res *Result) error {
+	cfg, freshPassword, err := panel.EnsureConfig()
+	if err != nil {
+		return fmt.Errorf("配置面板: %w", err)
+	}
+
+	binPath, err := os.Executable()
+	if err != nil {
+		binPath = "/usr/local/bin/singbox-panel"
+	}
+	if err := panel.InstallService(ctx, binPath); err != nil {
+		return fmt.Errorf("安装面板服务: %w", err)
+	}
+
+	host := dep.ServerIP
+	if dep.IPv6Only {
+		host = "[" + dep.ServerIP + "]"
+	}
+	res.PanelURL = fmt.Sprintf("https://%s:%d/%s/", host, cfg.Port, cfg.PathPrefix)
+	res.PanelPassword = freshPassword
 	return nil
 }
 

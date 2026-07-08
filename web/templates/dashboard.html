@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>控制台 · Sing-Box 面板</title>
+  <link rel="stylesheet" href="{{.Prefix}}/static/style.css">
+</head>
+<body data-prefix="{{.Prefix}}">
+  <header class="topbar">
+    <strong>Sing-Box 面板</strong>
+    <nav>
+      <a href="{{.Prefix}}/dashboard">控制台</a>
+      <a href="{{.Prefix}}/tools">节点转换</a>
+      <form method="post" action="{{.Prefix}}/logout" class="inline">
+        <button type="submit" class="link">退出</button>
+      </form>
+    </nav>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="status-row">
+        <div>
+          <div class="muted">服务器</div>
+          <div class="mono">{{.ServerIP}}</div>
+        </div>
+        <div>
+          <div class="muted">sing-box 状态</div>
+          <div id="svc-state" class="badge {{if .Active}}ok{{else}}down{{end}}">
+            {{if .Active}}运行中{{else}}已停止{{end}}
+          </div>
+        </div>
+        <div class="actions">
+          <button data-action="restart">重启</button>
+          <button data-action="stop" class="warn">停止</button>
+          <button data-action="start">启动</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      {{range .Nodes}}
+      <div class="card node">
+        <div class="node-head">
+          <h3>{{.Name}}</h3>
+          <button class="copy" data-url="{{.URL}}">复制</button>
+        </div>
+        <img class="qr" src="{{.QRPath}}" alt="{{.Name}} 二维码" loading="lazy">
+        <textarea class="link" readonly rows="3">{{.URL}}</textarea>
+      </div>
+      {{else}}
+      <p class="muted">没有可展示的节点。</p>
+      {{end}}
+    </section>
+
+    <section class="card">
+      <div class="node-head">
+        <h3>服务日志</h3>
+        <button id="load-logs">加载最近日志</button>
+      </div>
+      <pre id="logs" class="logs muted">点击上方按钮加载。</pre>
+    </section>
+  </main>
+
+  <script src="{{.Prefix}}/static/app.js"></script>
+</body>
+</html>

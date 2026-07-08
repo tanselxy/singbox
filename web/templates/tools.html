@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>节点转换 · Sing-Box 面板</title>
+  <link rel="stylesheet" href="{{.Prefix}}/static/style.css">
+</head>
+<body data-prefix="{{.Prefix}}">
+  <header class="topbar">
+    <strong>Sing-Box 面板</strong>
+    <nav>
+      <a href="{{.Prefix}}/dashboard">控制台</a>
+      <a href="{{.Prefix}}/tools">节点转换</a>
+      <form method="post" action="{{.Prefix}}/logout" class="inline">
+        <button type="submit" class="link">退出</button>
+      </form>
+    </nav>
+  </header>
+
+  <main>
+    <section class="card">
+      <h3>节点链接 → Clash 代理片段</h3>
+      <p class="muted">支持 vless（reality/tls）、vmess、trojan。粘贴单条链接后转换。</p>
+      <label>输入
+        <textarea id="input" rows="4" placeholder="vless://... 或 vmess://... 或 trojan://..."></textarea>
+      </label>
+      <div class="actions">
+        <button id="convert">转换 (Ctrl+Enter)</button>
+        <button id="copy-out">复制结果</button>
+        <button id="clear" class="warn">清空</button>
+      </div>
+      <div id="message"></div>
+      <label>输出
+        <textarea id="output" rows="10" readonly></textarea>
+      </label>
+    </section>
+  </main>
+
+  <script src="{{.Prefix}}/static/tools.js"></script>
+</body>
+</html>
