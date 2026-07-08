@@ -1,6 +1,6 @@
-// Package state persists the deployment model so the web panel can reload it
-// after install to render nodes, links and QR codes without re-deriving them
-// from config.json.
+// Package state persists server-level deployment settings so the web panel and
+// config regenerator can reload them. Per-client data lives in the SQLite store
+// (internal/store); this file holds only the shared Server settings.
 package state
 
 import (
@@ -13,39 +13,43 @@ import (
 	"github.com/tanselxy/singbox/internal/singbox"
 )
 
-// DeploymentPath is where the serialized deployment lives.
-var DeploymentPath = filepath.Join(singbox.ConfigDir, "deployment.json")
+var (
+	// ServerPath is where server-level settings are stored.
+	ServerPath = filepath.Join(singbox.ConfigDir, "server.json")
+	// DBPath is the SQLite database of clients and traffic.
+	DBPath = filepath.Join(singbox.ConfigDir, "panel.db")
+)
 
-// Save writes the deployment as 0600 JSON.
-func Save(d model.Deployment) error {
-	if err := os.MkdirAll(filepath.Dir(DeploymentPath), 0o700); err != nil {
+// SaveServer writes server settings as 0600 JSON.
+func SaveServer(s model.Server) error {
+	if err := os.MkdirAll(filepath.Dir(ServerPath), 0o700); err != nil {
 		return fmt.Errorf("create state dir: %w", err)
 	}
-	b, err := json.MarshalIndent(d, "", "  ")
+	b, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal deployment: %w", err)
+		return fmt.Errorf("marshal server: %w", err)
 	}
-	if err := os.WriteFile(DeploymentPath, b, 0o600); err != nil {
-		return fmt.Errorf("write deployment: %w", err)
+	if err := os.WriteFile(ServerPath, b, 0o600); err != nil {
+		return fmt.Errorf("write server: %w", err)
 	}
 	return nil
 }
 
-// Load reads the persisted deployment.
-func Load() (model.Deployment, error) {
-	b, err := os.ReadFile(DeploymentPath)
+// LoadServer reads the persisted server settings.
+func LoadServer() (model.Server, error) {
+	b, err := os.ReadFile(ServerPath)
 	if err != nil {
-		return model.Deployment{}, fmt.Errorf("read deployment: %w", err)
+		return model.Server{}, fmt.Errorf("read server: %w", err)
 	}
-	var d model.Deployment
-	if err := json.Unmarshal(b, &d); err != nil {
-		return model.Deployment{}, fmt.Errorf("parse deployment: %w", err)
+	var s model.Server
+	if err := json.Unmarshal(b, &s); err != nil {
+		return model.Server{}, fmt.Errorf("parse server: %w", err)
 	}
-	return d, nil
+	return s, nil
 }
 
-// Exists reports whether a persisted deployment is present.
+// Exists reports whether server settings are present.
 func Exists() bool {
-	_, err := os.Stat(DeploymentPath)
+	_, err := os.Stat(ServerPath)
 	return err == nil
 }

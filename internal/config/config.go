@@ -32,6 +32,20 @@ const outboundsBlock = `[
   { "type": "direct", "tag": "direct", "domain_resolver": "local" }
 ]`
 
+// Clash API endpoint, bound to loopback so only the local traffic poller can
+// reach it. The secret is shared with internal/traffic.
+const (
+	ClashAPIAddr   = "127.0.0.1:9090"
+	ClashAPISecret = "singbox-panel-local"
+)
+
+const experimentalBlock = `{
+  "clash_api": {
+    "external_controller": "` + ClashAPIAddr + `",
+    "secret": "` + ClashAPISecret + `"
+  }
+}`
+
 const routeBlock = `{
   "default_domain_resolver": "local",
   "rules": [
@@ -45,20 +59,21 @@ const routeBlock = `{
   ]
 }`
 
-// Build returns the full sing-box configuration for a deployment.
-func Build(d model.Deployment) sbschema.Config {
+// Build returns the full sing-box configuration for a server and its clients.
+func Build(srv model.Server, clients []model.Client) sbschema.Config {
 	return sbschema.Config{
-		Log:       sbschema.Log{Level: "info", Timestamp: true},
-		DNS:       json.RawMessage(dnsBlock),
-		Inbounds:  protocol.Inbounds(d),
-		Outbounds: json.RawMessage(outboundsBlock),
-		Route:     json.RawMessage(routeBlock),
+		Log:          sbschema.Log{Level: "info", Timestamp: true},
+		DNS:          json.RawMessage(dnsBlock),
+		Inbounds:     protocol.Inbounds(srv, clients),
+		Outbounds:    json.RawMessage(outboundsBlock),
+		Route:        json.RawMessage(routeBlock),
+		Experimental: json.RawMessage(experimentalBlock),
 	}
 }
 
-// Marshal renders a deployment to indented config.json bytes.
-func Marshal(d model.Deployment) ([]byte, error) {
-	b, err := json.MarshalIndent(Build(d), "", "  ")
+// Marshal renders a configuration to indented config.json bytes.
+func Marshal(srv model.Server, clients []model.Client) ([]byte, error) {
+	b, err := json.MarshalIndent(Build(srv, clients), "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("marshal sing-box config: %w", err)
 	}

@@ -93,3 +93,46 @@ type Link struct {
 	Name string // human label, e.g. "Reality"
 	URL  string // full share URL (vless://, hysteria2://, ...)
 }
+
+// ---------------------------------------------------------------------------
+// Multi-client model (P3)
+//
+// A deployment is split into server-level settings shared by everyone (Server)
+// and a set of per-user Clients. Each client appears as a user entry in every
+// inbound's users array, giving them independent credentials, subscription and
+// traffic accounting. This supersedes the single-user Deployment above, which
+// is retained only until the installer/panel are fully migrated.
+// ---------------------------------------------------------------------------
+
+// Server holds the deployment settings shared by all clients.
+type Server struct {
+	ServerIP  string `json:"server_ip"`
+	SNI       string `json:"sni"`
+	CDNDomain string `json:"cdn_domain"`
+	CertFile  string `json:"cert_file"`
+	KeyFile   string `json:"key_file"`
+	IPv6Only  bool   `json:"ipv6_only"`
+
+	Ports   Ports   `json:"ports"`
+	Reality Reality `json:"reality"`
+
+	// SS2022ServerKey is the server-level PSK for the multi-user Shadowsocks-2022
+	// listener behind ShadowTLS; each client also carries its own user PSK.
+	SS2022ServerKey string `json:"ss2022_server_key"`
+}
+
+// Client is one panel user with independent credentials.
+type Client struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+
+	UUID              string `json:"uuid"`               // VLESS / TUIC
+	Password          string `json:"password"`           // Trojan / Hysteria2
+	SS2022Key         string `json:"ss2022_key"`         // per-user Shadowsocks-2022 PSK
+	ShadowTLSPassword string `json:"shadowtls_password"` // per-user ShadowTLS handshake secret
+
+	SubToken   string `json:"sub_token"` // subscription URL token
+	Enabled    bool   `json:"enabled"`
+	QuotaBytes int64  `json:"quota_bytes"` // 0 = unlimited
+	CreatedAt  int64  `json:"created_at"`  // unix seconds
+}

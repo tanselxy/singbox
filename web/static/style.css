@@ -142,3 +142,27 @@ button.copy { background: none; color: var(--accent); border: 1px solid var(--bo
 
 .alert { color: var(--down); font-weight: 600; }
 .ok-msg { color: var(--ok); font-weight: 600; }
+
+/* client table */
+table.clients { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.clients th, table.clients td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+}
+table.clients th { color: var(--muted); font-weight: 600; }
+.row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.row-actions button { padding: 4px 10px; font-size: 13px; background: none; color: var(--accent); border: 1px solid var(--border); }
+.row-actions button.warn { color: var(--warn); }
+
+.add-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 12px;
+  background: var(--bg);
+  border-radius: 8px;
+}
+.add-form input { width: auto; flex: 1; min-width: 160px; margin: 0; }

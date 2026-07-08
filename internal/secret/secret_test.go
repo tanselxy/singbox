@@ -52,16 +52,44 @@ func TestNewRealityIsUniqueAndValid(t *testing.T) {
 	}
 }
 
-func TestNewCredentialsPopulated(t *testing.T) {
-	c, err := NewCredentials()
+func TestNewClientPopulated(t *testing.T) {
+	c, err := NewClient()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.UUID == "" || c.HysteriaPassword == "" || c.SSPassword == "" ||
-		c.ShadowTLSPassword == "" || c.Reality.PrivateKey == "" {
-		t.Fatalf("credential field left empty: %+v", c)
+	if c.UUID == "" || c.Password == "" || c.SS2022Key == "" ||
+		c.ShadowTLSPassword == "" || c.SubToken == "" {
+		t.Fatalf("client field left empty: %+v", c)
 	}
-	if _, err := base64.StdEncoding.DecodeString(c.SSPassword); err != nil {
-		t.Errorf("SSPassword must be valid base64: %v", err)
+	if _, err := base64.StdEncoding.DecodeString(c.SS2022Key); err != nil {
+		t.Errorf("SS2022Key must be valid base64: %v", err)
+	}
+}
+
+func TestNewServerSecretsUnique(t *testing.T) {
+	r1, k1, err := NewServerSecrets()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2, k2, err := NewServerSecrets()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r1.PrivateKey == r2.PrivateKey || k1 == k2 {
+		t.Error("server secrets must differ between installs")
+	}
+}
+
+func TestTokensAreUnique(t *testing.T) {
+	seen := map[string]bool{}
+	for i := 0; i < 100; i++ {
+		tok, err := Token(24)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if seen[tok] {
+			t.Fatal("duplicate token")
+		}
+		seen[tok] = true
 	}
 }

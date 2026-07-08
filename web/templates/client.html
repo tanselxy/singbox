@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Client.Name}} · Sing-Box 面板</title>
+  <link rel="stylesheet" href="{{.Prefix}}/static/style.css">
+</head>
+<body data-prefix="{{.Prefix}}">
+  <header class="topbar">
+    <strong>Sing-Box 面板</strong>
+    <nav>
+      <a href="{{.Prefix}}/dashboard">← 返回控制台</a>
+      <a href="{{.Prefix}}/tools">节点转换</a>
+      <form method="post" action="{{.Prefix}}/logout" class="inline">
+        <button type="submit" class="link">退出</button>
+      </form>
+    </nav>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="status-row">
+        <div><div class="muted">客户</div><div class="mono">{{.Client.Name}}</div></div>
+        <div><div class="muted">已用流量</div><div>{{.Used}}</div></div>
+        <div><div class="muted">配额</div><div>{{.Quota}}</div></div>
+      </div>
+      <div class="node-head" style="margin-top:16px">
+        <h3>订阅链接</h3>
+        <button class="copy" data-url="{{.SubURL}}">复制</button>
+      </div>
+      <textarea class="link" readonly rows="2">{{.SubURL}}</textarea>
+      <p class="muted">导入到 v2rayN / Shadowrocket / sing-box 等客户端（base64 订阅）。追加 <span class="mono">?target=raw</span> 可得明文链接列表。</p>
+    </section>
+
+    <section class="grid">
+      {{range .Nodes}}
+      <div class="card node">
+        <div class="node-head">
+          <h3>{{.Name}}</h3>
+          <button class="copy" data-url="{{.URL}}">复制</button>
+        </div>
+        <img class="qr" src="{{.QRPath}}" alt="{{.Name}} 二维码" loading="lazy">
+        <textarea class="link" readonly rows="3">{{.URL}}</textarea>
+      </div>
+      {{else}}
+      <p class="muted">没有可展示的节点。</p>
+      {{end}}
+    </section>
+  </main>
+
+  <script src="{{.Prefix}}/static/app.js"></script>
+</body>
+</html>

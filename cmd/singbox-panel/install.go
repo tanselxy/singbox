@@ -83,7 +83,8 @@ func parsePortRange(s string) (int, int, error) {
 
 func printResult(res *installer.Result, qr bool) {
 	fmt.Printf("\n配置已写入: %s\n", res.ConfigPath)
-	fmt.Printf("服务器地址: %s\n\n", res.Deployment.ServerIP)
+	fmt.Printf("服务器地址: %s\n", res.Server.ServerIP)
+	fmt.Printf("初始客户: %s\n\n", res.Client.Name)
 	fmt.Println("=============== 节点链接 ===============")
 	for _, l := range res.Links {
 		fmt.Printf("\n【%s】\n%s\n", l.Name, l.URL)

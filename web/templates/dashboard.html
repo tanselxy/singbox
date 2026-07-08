@@ -39,19 +39,45 @@
       </div>
     </section>
 
-    <section class="grid">
-      {{range .Nodes}}
-      <div class="card node">
-        <div class="node-head">
-          <h3>{{.Name}}</h3>
-          <button class="copy" data-url="{{.URL}}">复制</button>
-        </div>
-        <img class="qr" src="{{.QRPath}}" alt="{{.Name}} 二维码" loading="lazy">
-        <textarea class="link" readonly rows="3">{{.URL}}</textarea>
+    <section class="card">
+      <div class="node-head">
+        <h3>客户</h3>
+        <button id="add-client">+ 新增客户</button>
       </div>
-      {{else}}
-      <p class="muted">没有可展示的节点。</p>
-      {{end}}
+      <div id="add-form" class="add-form" hidden>
+        <input id="new-name" type="text" placeholder="客户名（唯一）">
+        <input id="new-quota" type="number" min="0" step="1" placeholder="流量配额 GB（0=不限）">
+        <button id="create-client">创建</button>
+        <button id="cancel-add" class="link">取消</button>
+      </div>
+      <table class="clients">
+        <thead>
+          <tr><th>名称</th><th>状态</th><th>已用</th><th>配额</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          {{range .Clients}}
+          <tr data-id="{{.ID}}">
+            <td><a href="{{$.Prefix}}/client/{{.ID}}">{{.Name}}</a></td>
+            <td>
+              <span class="badge {{if .Enabled}}ok{{else}}down{{end}}">{{if .Enabled}}启用{{else}}停用{{end}}</span>
+            </td>
+            <td class="{{if .OverQuota}}alert{{end}}">{{.Used}}</td>
+            <td>{{.Quota}}</td>
+            <td class="row-actions">
+              {{if .Enabled}}
+              <button data-client-action="disable" data-id="{{.ID}}">停用</button>
+              {{else}}
+              <button data-client-action="enable" data-id="{{.ID}}">启用</button>
+              {{end}}
+              <button data-client-action="reset-traffic" data-id="{{.ID}}">清零流量</button>
+              <button data-client-action="delete" data-id="{{.ID}}" class="warn">删除</button>
+            </td>
+          </tr>
+          {{else}}
+          <tr><td colspan="5" class="muted">还没有客户，点右上角新增。</td></tr>
+          {{end}}
+        </tbody>
+      </table>
     </section>
 
     <section class="card">

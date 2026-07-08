@@ -18,36 +18,60 @@ const (
 	hexChars = "0123456789abcdef"
 )
 
-// NewCredentials builds a fresh, fully-populated credential set.
-func NewCredentials() (model.Credentials, error) {
+// NewServerSecrets builds the server-level secrets shared by all clients: the
+// Reality key pair and the Shadowsocks-2022 server PSK.
+func NewServerSecrets() (reality model.Reality, ss2022ServerKey string, err error) {
+	reality, err = NewReality()
+	if err != nil {
+		return model.Reality{}, "", err
+	}
+	// Shadowsocks-2022 chacha20 needs a 32-byte base64 key.
+	ss2022ServerKey, err = Base64Key(32)
+	if err != nil {
+		return model.Reality{}, "", err
+	}
+	return reality, ss2022ServerKey, nil
+}
+
+// NewClient builds a client with fresh credentials and a subscription token.
+// The caller sets Name, Enabled, QuotaBytes and CreatedAt.
+func NewClient() (model.Client, error) {
 	uuid, err := UUID()
 	if err != nil {
-		return model.Credentials{}, err
+		return model.Client{}, err
 	}
-	hyPass, err := Password(15)
+	password, err := Password(15)
 	if err != nil {
-		return model.Credentials{}, err
+		return model.Client{}, err
 	}
-	// Shadowsocks-2022 (chacha20) needs a 32-byte base64 key.
-	ssPass, err := Base64Key(32)
+	ss2022Key, err := Base64Key(32)
 	if err != nil {
-		return model.Credentials{}, err
+		return model.Client{}, err
 	}
 	stlsPass, err := Base64Key(32)
 	if err != nil {
-		return model.Credentials{}, err
+		return model.Client{}, err
 	}
-	reality, err := NewReality()
+	token, err := Token(24)
 	if err != nil {
-		return model.Credentials{}, err
+		return model.Client{}, err
 	}
-	return model.Credentials{
+	return model.Client{
 		UUID:              uuid,
-		HysteriaPassword:  hyPass,
-		SSPassword:        ssPass,
+		Password:          password,
+		SS2022Key:         ss2022Key,
 		ShadowTLSPassword: stlsPass,
-		Reality:           reality,
+		SubToken:          token,
 	}, nil
+}
+
+// Token returns a URL-safe random token of nBytes of entropy.
+func Token(nBytes int) (string, error) {
+	b := make([]byte, nBytes)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate token: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 // UUID returns a random RFC 4122 version-4 UUID.

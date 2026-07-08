@@ -7,11 +7,12 @@ import "encoding/json"
 
 // Config is a full sing-box server configuration document.
 type Config struct {
-	Log       Log             `json:"log"`
-	DNS       json.RawMessage `json:"dns"`
-	Inbounds  []Inbound       `json:"inbounds"`
-	Outbounds json.RawMessage `json:"outbounds"`
-	Route     json.RawMessage `json:"route"`
+	Log          Log             `json:"log"`
+	DNS          json.RawMessage `json:"dns"`
+	Inbounds     []Inbound       `json:"inbounds"`
+	Outbounds    json.RawMessage `json:"outbounds"`
+	Route        json.RawMessage `json:"route"`
+	Experimental json.RawMessage `json:"experimental,omitempty"`
 }
 
 // Log is the logging block.

@@ -1,6 +1,12 @@
-// Package protocol turns a model.Deployment into sing-box inbounds and the
-// matching client share links. Inbounds and links are generated side by side
-// from the same Deployment so their ports and secrets can never drift apart.
+// Package protocol turns a server config plus a set of clients into sing-box
+// inbounds and the matching per-client share links. Inbounds and links are
+// generated from the same data so their ports and secrets can never drift.
+//
+// Multi-user notes (verified against sing-box 1.13.3):
+//   - VLESS/TUIC/Trojan/Hysteria2/ShadowTLS take a users array directly.
+//   - Shadowsocks-2022 multi-user uses a server-level PSK plus a per-user PSK;
+//     the client key is "serverPSK:userPSK".
+//   - Plain Shadowsocks (aes-128-gcm) cannot be multi-user and is dropped.
 package protocol
 
 import (
@@ -13,15 +19,15 @@ import (
 )
 
 const (
-	// selfSignedSNI is the CN of the generated self-signed certificate. TUIC,
-	// Trojan and Hysteria2 present it; clients connect with insecure=1 so the
-	// exact value only needs to be internally consistent.
+	// selfSignedSNI is the CN of the generated self-signed certificate.
 	selfSignedSNI = "bing.com"
 
-	ssTLSMethod  = "2022-blake3-chacha20-poly1305" // Shadowsocks-2022 behind ShadowTLS
-	ssTLSDetour  = "ss-in"
-	ssTLSSSPort  = 10808 // loopback port the ShadowTLS detour forwards to
-	ssDirectAlgo = "aes-128-gcm"
+	// ssTLSMethod is the Shadowsocks-2022 method behind ShadowTLS. Multi-user
+	// (EIH) support requires an AES method — chacha20-poly1305 does NOT support
+	// multiple users. aes-256-gcm takes a 32-byte key, matching secret.Base64Key(32).
+	ssTLSMethod = "2022-blake3-aes-256-gcm"
+	ssTLSDetour = "ss-in"
+	ssTLSSSPort = 10808 // loopback port the ShadowTLS detour forwards to
 
 	wsPathVLESS  = "/vless"
 	wsPathTrojan = "/trojan"
@@ -29,42 +35,41 @@ const (
 	cdnPort = 4433 // VLESS-CDN listens on a fixed port
 )
 
-// Inbounds builds the sing-box inbounds for a deployment. IPv6-only
-// deployments expose only the VLESS-CDN listener.
-func Inbounds(d model.Deployment) []sbschema.Inbound {
-	if d.IPv6Only {
-		return []sbschema.Inbound{vlessCDNInbound(d)}
+// Inbounds builds the sing-box inbounds for a server and its clients. Each
+// client becomes a user entry in every inbound. IPv6-only deployments expose
+// only the VLESS-CDN listener.
+func Inbounds(srv model.Server, clients []model.Client) []sbschema.Inbound {
+	if srv.IPv6Only {
+		return []sbschema.Inbound{vlessCDNInbound(srv, clients)}
 	}
 	return []sbschema.Inbound{
-		shadowTLSInbound(d),
-		ssBehindShadowTLSInbound(d),
-		ssDirectInbound(d),
-		tuicInbound(d),
-		realityInbound(d),
-		vlessCDNInbound(d),
-		trojanInbound(d),
-		hysteria2Inbound(d),
+		shadowTLSInbound(srv, clients),
+		ssBehindShadowTLSInbound(srv, clients),
+		tuicInbound(srv, clients),
+		realityInbound(srv, clients),
+		vlessCDNInbound(srv, clients),
+		trojanInbound(srv, clients),
+		hysteria2Inbound(srv, clients),
 	}
 }
 
-// Links builds every client-facing share link for a deployment.
-func Links(d model.Deployment) []model.Link {
-	if d.IPv6Only {
-		if d.CDNDomain == "" {
+// ClientLinks builds every share link for a single client.
+func ClientLinks(srv model.Server, c model.Client) []model.Link {
+	if srv.IPv6Only {
+		if srv.CDNDomain == "" {
 			return nil
 		}
-		return []model.Link{cdnLink(d)}
+		return []model.Link{cdnLink(srv, c)}
 	}
 	links := []model.Link{
-		realityLink(d),
-		hysteria2Link(d),
-		trojanLink(d),
-		tuicLink(d),
-		shadowTLSLink(d),
-		ssDirectLink(d),
+		realityLink(srv, c),
+		hysteria2Link(srv, c),
+		trojanLink(srv, c),
+		tuicLink(srv, c),
+		shadowTLSLink(srv, c),
 	}
-	if d.CDNDomain != "" {
-		links = append(links, cdnLink(d))
+	if srv.CDNDomain != "" {
+		links = append(links, cdnLink(srv, c))
 	}
 	return links
 }
@@ -73,23 +78,29 @@ func Links(d model.Deployment) []model.Link {
 // Inbounds
 // ---------------------------------------------------------------------------
 
-func shadowTLSInbound(d model.Deployment) sbschema.Inbound {
+func shadowTLSInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
+	users := make([]sbschema.User, 0, len(clients))
+	for _, c := range clients {
+		users = append(users, sbschema.User{Name: c.Name, Password: c.ShadowTLSPassword})
+	}
 	return sbschema.Inbound{
 		Type:       "shadowtls",
 		Tag:        "st-in",
 		Listen:     "::",
-		ListenPort: d.Ports.ShadowTLS,
+		ListenPort: srv.Ports.ShadowTLS,
 		Version:    3,
-		Users: []sbschema.User{
-			{Name: "username", Password: d.Creds.ShadowTLSPassword},
-		},
-		Handshake:  &sbschema.Handshake{Server: d.SNI, ServerPort: 443},
+		Users:      users,
+		Handshake:  &sbschema.Handshake{Server: srv.SNI, ServerPort: 443},
 		StrictMode: true,
 		Detour:     ssTLSDetour,
 	}
 }
 
-func ssBehindShadowTLSInbound(d model.Deployment) sbschema.Inbound {
+func ssBehindShadowTLSInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
+	users := make([]sbschema.User, 0, len(clients))
+	for _, c := range clients {
+		users = append(users, sbschema.User{Name: c.Name, Password: c.SS2022Key})
+	}
 	return sbschema.Inbound{
 		Type:       "shadowsocks",
 		Tag:        ssTLSDetour,
@@ -97,169 +108,174 @@ func ssBehindShadowTLSInbound(d model.Deployment) sbschema.Inbound {
 		ListenPort: ssTLSSSPort,
 		Network:    "tcp",
 		Method:     ssTLSMethod,
-		Password:   d.Creds.SSPassword,
+		Password:   srv.SS2022ServerKey,
+		Users:      users,
 	}
 }
 
-func ssDirectInbound(d model.Deployment) sbschema.Inbound {
-	return sbschema.Inbound{
-		Type:       "shadowsocks",
-		Tag:        "ss-ix",
-		Listen:     "::",
-		ListenPort: d.Ports.SSDirect,
-		Method:     ssDirectAlgo,
-		Password:   d.Creds.HysteriaPassword,
+func tuicInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
+	users := make([]sbschema.User, 0, len(clients))
+	for _, c := range clients {
+		users = append(users, sbschema.User{Name: c.Name, UUID: c.UUID})
 	}
-}
-
-func tuicInbound(d model.Deployment) sbschema.Inbound {
 	return sbschema.Inbound{
 		Type:              "tuic",
 		Tag:               "tuic-in",
 		Listen:            "::",
-		ListenPort:        d.Ports.TUIC,
-		Users:             []sbschema.User{{UUID: d.Creds.UUID}},
+		ListenPort:        srv.Ports.TUIC,
+		Users:             users,
 		CongestionControl: "bbr",
 		TLS: &sbschema.TLS{
 			Enabled:         true,
 			ServerName:      selfSignedSNI,
 			ALPN:            []string{"h3"},
-			CertificatePath: d.CertFile,
-			KeyPath:         d.KeyFile,
+			CertificatePath: srv.CertFile,
+			KeyPath:         srv.KeyFile,
 		},
 	}
 }
 
-func realityInbound(d model.Deployment) sbschema.Inbound {
+func realityInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
+	users := make([]sbschema.User, 0, len(clients))
+	for _, c := range clients {
+		users = append(users, sbschema.User{Name: c.Name, UUID: c.UUID, Flow: "xtls-rprx-vision"})
+	}
 	return sbschema.Inbound{
 		Type:       "vless",
 		Tag:        "vless-in",
 		Listen:     "::",
-		ListenPort: d.Ports.Reality,
-		Users:      []sbschema.User{{UUID: d.Creds.UUID, Flow: "xtls-rprx-vision"}},
+		ListenPort: srv.Ports.Reality,
+		Users:      users,
 		TLS: &sbschema.TLS{
 			Enabled:    true,
-			ServerName: d.SNI,
+			ServerName: srv.SNI,
 			Reality: &sbschema.Reality{
 				Enabled:    true,
-				Handshake:  &sbschema.Handshake{Server: d.SNI, ServerPort: 443},
-				PrivateKey: d.Creds.Reality.PrivateKey,
-				ShortID:    []string{d.Creds.Reality.ShortID},
+				Handshake:  &sbschema.Handshake{Server: srv.SNI, ServerPort: 443},
+				PrivateKey: srv.Reality.PrivateKey,
+				ShortID:    []string{srv.Reality.ShortID},
 			},
 		},
 	}
 }
 
-func vlessCDNInbound(d model.Deployment) sbschema.Inbound {
+func vlessCDNInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
+	users := make([]sbschema.User, 0, len(clients))
+	for _, c := range clients {
+		users = append(users, sbschema.User{Name: c.Name, UUID: c.UUID})
+	}
 	return sbschema.Inbound{
 		Type:       "vless",
 		Tag:        "vless-cdn",
 		Listen:     "::",
 		ListenPort: cdnPort,
-		Users:      []sbschema.User{{UUID: d.Creds.UUID}},
+		Users:      users,
 		Transport:  &sbschema.Transport{Type: "ws", Path: wsPathVLESS},
 		TLS: &sbschema.TLS{
 			Enabled:         true,
-			ServerName:      d.CDNDomain,
-			CertificatePath: d.CertFile,
-			KeyPath:         d.KeyFile,
+			ServerName:      srv.CDNDomain,
+			CertificatePath: srv.CertFile,
+			KeyPath:         srv.KeyFile,
 		},
 	}
 }
 
-func trojanInbound(d model.Deployment) sbschema.Inbound {
+func trojanInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
+	users := make([]sbschema.User, 0, len(clients))
+	for _, c := range clients {
+		users = append(users, sbschema.User{Name: c.Name, Password: c.Password})
+	}
 	return sbschema.Inbound{
 		Type:       "trojan",
 		Tag:        "trojan-in",
 		Listen:     "::",
-		ListenPort: d.Ports.TrojanWS,
-		Users:      []sbschema.User{{Password: d.Creds.HysteriaPassword}},
+		ListenPort: srv.Ports.TrojanWS,
+		Users:      users,
 		TLS: &sbschema.TLS{
 			Enabled:         true,
 			ServerName:      selfSignedSNI,
-			CertificatePath: d.CertFile,
-			KeyPath:         d.KeyFile,
+			CertificatePath: srv.CertFile,
+			KeyPath:         srv.KeyFile,
 		},
 		Transport: &sbschema.Transport{Type: "ws", Path: wsPathTrojan},
 	}
 }
 
-func hysteria2Inbound(d model.Deployment) sbschema.Inbound {
+func hysteria2Inbound(srv model.Server, clients []model.Client) sbschema.Inbound {
+	users := make([]sbschema.User, 0, len(clients))
+	for _, c := range clients {
+		users = append(users, sbschema.User{Name: c.Name, Password: c.Password})
+	}
 	return sbschema.Inbound{
 		Type:       "hysteria2",
 		Tag:        "hy2-in",
 		Listen:     "::",
-		ListenPort: d.Ports.Hysteria2,
-		Users:      []sbschema.User{{Password: d.Creds.HysteriaPassword}},
+		ListenPort: srv.Ports.Hysteria2,
+		Users:      users,
 		TLS: &sbschema.TLS{
 			Enabled:         true,
 			ALPN:            []string{"h3"},
-			CertificatePath: d.CertFile,
-			KeyPath:         d.KeyFile,
+			CertificatePath: srv.CertFile,
+			KeyPath:         srv.KeyFile,
 		},
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Links
+// Links (per client)
 // ---------------------------------------------------------------------------
 
-func realityLink(d model.Deployment) model.Link {
+func realityLink(srv model.Server, c model.Client) model.Link {
 	url := fmt.Sprintf(
-		"vless://%s@%s:%d?security=reality&flow=xtls-rprx-vision&type=tcp&sni=%s&fp=chrome&pbk=%s&sid=%s&encryption=none#Reality",
-		d.Creds.UUID, hostForLink(d.ServerIP), d.Ports.Reality, d.SNI,
-		d.Creds.Reality.PublicKey, d.Creds.Reality.ShortID,
+		"vless://%s@%s:%d?security=reality&flow=xtls-rprx-vision&type=tcp&sni=%s&fp=chrome&pbk=%s&sid=%s&encryption=none#%s-Reality",
+		c.UUID, hostForLink(srv.ServerIP), srv.Ports.Reality, srv.SNI,
+		srv.Reality.PublicKey, srv.Reality.ShortID, c.Name,
 	)
 	return model.Link{Kind: model.KindReality, Name: "Reality", URL: url}
 }
 
-func hysteria2Link(d model.Deployment) model.Link {
+func hysteria2Link(srv model.Server, c model.Client) model.Link {
 	url := fmt.Sprintf(
-		"hysteria2://%s@%s:%d?insecure=1&alpn=h3&sni=%s#Hysteria2",
-		d.Creds.HysteriaPassword, hostForLink(d.ServerIP), d.Ports.Hysteria2, selfSignedSNI,
+		"hysteria2://%s@%s:%d?insecure=1&alpn=h3&sni=%s#%s-Hysteria2",
+		c.Password, hostForLink(srv.ServerIP), srv.Ports.Hysteria2, selfSignedSNI, c.Name,
 	)
 	return model.Link{Kind: model.KindHysteria2, Name: "Hysteria2", URL: url}
 }
 
-func trojanLink(d model.Deployment) model.Link {
+func trojanLink(srv model.Server, c model.Client) model.Link {
 	url := fmt.Sprintf(
-		"trojan://%s@%s:%d?sni=%s&type=ws&path=%%2Ftrojan&host=%s&allowInsecure=1&udp=true&alpn=http%%2F1.1#Trojan",
-		d.Creds.HysteriaPassword, hostForLink(d.ServerIP), d.Ports.TrojanWS, selfSignedSNI, selfSignedSNI,
+		"trojan://%s@%s:%d?sni=%s&type=ws&path=%%2Ftrojan&host=%s&allowInsecure=1&udp=true&alpn=http%%2F1.1#%s-Trojan",
+		c.Password, hostForLink(srv.ServerIP), srv.Ports.TrojanWS, selfSignedSNI, selfSignedSNI, c.Name,
 	)
 	return model.Link{Kind: model.KindTrojanWS, Name: "Trojan WS", URL: url}
 }
 
-func tuicLink(d model.Deployment) model.Link {
+func tuicLink(srv model.Server, c model.Client) model.Link {
 	url := fmt.Sprintf(
-		"tuic://%s:@%s:%d?alpn=h3&allow_insecure=1&congestion_control=bbr#TUIC",
-		d.Creds.UUID, hostForLink(d.ServerIP), d.Ports.TUIC,
+		"tuic://%s:@%s:%d?alpn=h3&allow_insecure=1&congestion_control=bbr#%s-TUIC",
+		c.UUID, hostForLink(srv.ServerIP), srv.Ports.TUIC, c.Name,
 	)
 	return model.Link{Kind: model.KindTUIC, Name: "TUIC", URL: url}
 }
 
-func ssDirectLink(d model.Deployment) model.Link {
-	userInfo := b64(ssDirectAlgo + ":" + d.Creds.HysteriaPassword)
-	url := fmt.Sprintf("ss://%s@%s:%d#SS%%E4%%B8%%93%%E7%%BA%%BF", userInfo, hostForLink(d.ServerIP), d.Ports.SSDirect)
-	return model.Link{Kind: model.KindSSDirect, Name: "SS 专线", URL: url}
-}
-
-func shadowTLSLink(d model.Deployment) model.Link {
-	userInfo := b64(ssTLSMethod + ":" + d.Creds.SSPassword)
+func shadowTLSLink(srv model.Server, c model.Client) model.Link {
+	// Shadowsocks-2022 multi-user client key is "serverPSK:userPSK".
+	userInfo := b64(ssTLSMethod + ":" + srv.SS2022ServerKey + ":" + c.SS2022Key)
 	shadowJSON := fmt.Sprintf(
 		`{"address":"%s","password":"%s","version":"3","host":"%s","port":"%d"}`,
-		d.ServerIP, d.Creds.ShadowTLSPassword, d.SNI, d.Ports.ShadowTLS,
+		srv.ServerIP, c.ShadowTLSPassword, srv.SNI, srv.Ports.ShadowTLS,
 	)
 	url := fmt.Sprintf(
-		"ss://%s@%s:%d?shadow-tls=%s#ShadowTLS-v3",
-		userInfo, bracket(d.ServerIP), d.Ports.ShadowTLS, b64(shadowJSON),
+		"ss://%s@%s:%d?shadow-tls=%s#%s-ShadowTLS-v3",
+		userInfo, bracket(srv.ServerIP), srv.Ports.ShadowTLS, b64(shadowJSON), c.Name,
 	)
 	return model.Link{Kind: model.KindShadowTLS, Name: "ShadowTLS v3", URL: url}
 }
 
-func cdnLink(d model.Deployment) model.Link {
+func cdnLink(srv model.Server, c model.Client) model.Link {
 	url := fmt.Sprintf(
-		"vless://%s@%s:443?encryption=none&security=tls&type=ws&host=%s&sni=%s&path=%%2Fvless#CDN",
-		d.Creds.UUID, d.CDNDomain, d.CDNDomain, d.CDNDomain,
+		"vless://%s@%s:443?encryption=none&security=tls&type=ws&host=%s&sni=%s&path=%%2Fvless#%s-CDN",
+		c.UUID, srv.CDNDomain, srv.CDNDomain, srv.CDNDomain, c.Name,
 	)
 	return model.Link{Kind: model.KindVLESSCDN, Name: "VLESS CDN", URL: url}
 }
@@ -278,6 +294,5 @@ func hostForLink(host string) string {
 	return host
 }
 
-// bracket always brackets an IPv6 literal; the ShadowTLS link format kept the
-// brackets even for IPv4 in the old code, but bracketing only v6 is correct.
+// bracket always brackets an IPv6 literal (IPv4 returned unchanged).
 func bracket(host string) string { return hostForLink(host) }

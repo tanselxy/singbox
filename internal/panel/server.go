@@ -7,8 +7,11 @@ import (
 	"html/template"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
+	"github.com/tanselxy/singbox/internal/state"
+	"github.com/tanselxy/singbox/internal/store"
 	"github.com/tanselxy/singbox/web"
 )
 
@@ -18,9 +21,15 @@ type Server struct {
 	auth   *auth
 	tmpl   *template.Template
 	prefix string // "/<path-prefix>"
+
+	db *store.Store
+
+	// applyMu serializes config regeneration + sing-box restart so concurrent
+	// client edits cannot interleave.
+	applyMu sync.Mutex
 }
 
-// New builds a panel server from its bootstrap config.
+// New builds a panel server from its bootstrap config, opening the client store.
 func New(cfg Config) (*Server, error) {
 	a, err := newAuth(cfg.SessionKey)
 	if err != nil {
@@ -30,7 +39,11 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
-	return &Server{cfg: cfg, auth: a, tmpl: tmpl, prefix: "/" + cfg.PathPrefix}, nil
+	db, err := store.Open(state.DBPath)
+	if err != nil {
+		return nil, fmt.Errorf("open client store: %w", err)
+	}
+	return &Server{cfg: cfg, auth: a, tmpl: tmpl, prefix: "/" + cfg.PathPrefix, db: db}, nil
 }
 
 // Handler returns the routed, security-wrapped HTTP handler.
@@ -44,11 +57,19 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST "+p+"/logout", s.handleLogout)
 
 	mux.HandleFunc("GET "+p+"/dashboard", s.protected(s.handleDashboard))
+	mux.HandleFunc("GET "+p+"/client/{id}", s.protected(s.handleClientDetail))
 	mux.HandleFunc("GET "+p+"/tools", s.protected(s.handleTools))
 	mux.HandleFunc("GET "+p+"/qr", s.protected(s.handleQR))
 	mux.HandleFunc("GET "+p+"/api/status", s.protected(s.handleStatus))
 	mux.HandleFunc("GET "+p+"/api/logs", s.protected(s.handleLogs))
 	mux.HandleFunc("POST "+p+"/api/service/{action}", s.protected(s.handleServiceAction))
+
+	// Client management.
+	mux.HandleFunc("POST "+p+"/api/clients", s.protected(s.handleClientCreate))
+	mux.HandleFunc("POST "+p+"/api/clients/{id}/{action}", s.protected(s.handleClientAction))
+
+	// Subscription endpoint: token-authenticated (no login), for client apps.
+	mux.HandleFunc("GET "+p+"/sub/{token}", s.handleSubscription)
 
 	// Embedded static assets, served under <prefix>/static/.
 	mux.Handle("GET "+p+"/static/", http.StripPrefix(p+"/", http.FileServer(http.FS(web.FS))))

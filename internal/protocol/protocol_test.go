@@ -8,68 +8,53 @@ import (
 	"github.com/tanselxy/singbox/internal/model"
 )
 
-func sampleDeployment() model.Deployment {
-	return model.Deployment{
-		ServerIP:  "203.0.113.7",
-		SNI:       "www.apple.com",
-		CDNDomain: "cdn.example.com",
-		CertFile:  "/etc/sing-box/cert/cert.pem",
-		KeyFile:   "/etc/sing-box/cert/private.key",
-		Creds: model.Credentials{
-			UUID:              "11111111-2222-3333-4444-555555555555",
-			HysteriaPassword:  "hyPass123",
-			SSPassword:        "c3NwYXNz",
-			ShadowTLSPassword: "stlsPass==",
-			Reality: model.Reality{
-				PrivateKey: "priv-key",
-				PublicKey:  "pub-key",
-				ShortID:    "0123456789abcdef",
-			},
-		},
+func sampleServer() model.Server {
+	return model.Server{
+		ServerIP:        "203.0.113.7",
+		SNI:             "www.apple.com",
+		CDNDomain:       "cdn.example.com",
+		CertFile:        "/etc/sing-box/cert/cert.pem",
+		KeyFile:         "/etc/sing-box/cert/private.key",
+		SS2022ServerKey: "c2VydmVyUFNL",
+		Reality:         model.Reality{PrivateKey: "priv", PublicKey: "pub-key", ShortID: "0123456789abcdef"},
 		// Deliberately non-pool ports to emulate NAT-mode random assignment.
-		Ports: model.Ports{
-			Reality:   41001,
-			Hysteria2: 41002,
-			ShadowTLS: 41003,
-			SSDirect:  41004,
-			TUIC:      41005,
-			TrojanWS:  41006,
-			VLESSCDN:  4433,
-		},
+		Ports: model.Ports{Reality: 41001, Hysteria2: 41002, ShadowTLS: 41003, TUIC: 41005, TrojanWS: 41006, VLESSCDN: 4433},
 	}
 }
 
-// TestLinkPortsMatchInboundPorts is the core regression guard: every share
-// link must advertise the same port the corresponding inbound listens on.
-// The old bash code hard-coded 63333/61555/59000 in links while NAT mode
-// randomised the server ports, so links pointed at dead ports.
-func TestLinkPortsMatchInboundPorts(t *testing.T) {
-	d := sampleDeployment()
+func clients() []model.Client {
+	return []model.Client{
+		{ID: 1, Name: "alice", UUID: "11111111-1111-1111-1111-111111111111", Password: "aPass", SS2022Key: "YWxpY2VLZXk=", ShadowTLSPassword: "aStls"},
+		{ID: 2, Name: "bob", UUID: "22222222-2222-2222-2222-222222222222", Password: "bPass", SS2022Key: "Ym9iS2V5", ShadowTLSPassword: "bStls"},
+	}
+}
 
-	// Read the real listening port straight off each inbound, keyed by tag
-	// (type is not unique: vless-in and vless-cdn are both "vless").
+// TestLinkPortsMatchInboundPorts guards against the old NAT port-drift bug:
+// every client link must advertise the port of its serving inbound.
+func TestLinkPortsMatchInboundPorts(t *testing.T) {
+	srv := sampleServer()
+	cs := clients()
+
 	portByTag := map[string]int{}
-	for _, in := range Inbounds(d) {
+	for _, in := range Inbounds(srv, cs) {
 		portByTag[in.Tag] = in.ListenPort
 	}
 
-	// Each client link must advertise the port of its serving inbound.
 	linkToInbound := map[model.Kind]string{
 		model.KindReality:   "vless-in",
 		model.KindHysteria2: "hy2-in",
 		model.KindTrojanWS:  "trojan-in",
 		model.KindTUIC:      "tuic-in",
-		model.KindSSDirect:  "ss-ix",
 		model.KindShadowTLS: "st-in",
 	}
 
-	linkByKind := map[model.Kind]string{}
-	for _, l := range Links(d) {
-		linkByKind[l.Kind] = l.URL
+	links := map[model.Kind]string{}
+	for _, l := range ClientLinks(srv, cs[0]) {
+		links[l.Kind] = l.URL
 	}
 
 	for kind, tag := range linkToInbound {
-		url, ok := linkByKind[kind]
+		url, ok := links[kind]
 		if !ok {
 			t.Errorf("%s: no link generated", kind)
 			continue
@@ -81,45 +66,70 @@ func TestLinkPortsMatchInboundPorts(t *testing.T) {
 	}
 }
 
-func TestPerInstallSecretsAppearInLinks(t *testing.T) {
-	d := sampleDeployment()
-	links := Links(d)
-	var reality string
-	for _, l := range links {
-		if l.Kind == model.KindReality {
-			reality = l.URL
+func TestEveryInboundHasAllClientsAsUsers(t *testing.T) {
+	srv := sampleServer()
+	cs := clients()
+	for _, in := range Inbounds(srv, cs) {
+		if len(in.Users) != len(cs) {
+			t.Errorf("inbound %s has %d users, want %d", in.Tag, len(in.Users), len(cs))
 		}
 	}
-	if reality == "" {
-		t.Fatal("no reality link")
+}
+
+func TestClientLinksCarryOwnCredentials(t *testing.T) {
+	srv := sampleServer()
+	cs := clients()
+
+	aliceReality := ""
+	for _, l := range ClientLinks(srv, cs[0]) {
+		if l.Kind == model.KindReality {
+			aliceReality = l.URL
+		}
 	}
-	if !strings.Contains(reality, "pbk="+d.Creds.Reality.PublicKey) {
-		t.Errorf("reality link must carry the per-install public key: %s", reality)
+	if !strings.Contains(aliceReality, cs[0].UUID) {
+		t.Errorf("alice's reality link must carry her uuid: %s", aliceReality)
 	}
-	if !strings.Contains(reality, "sid="+d.Creds.Reality.ShortID) {
-		t.Errorf("reality link must carry the per-install short id: %s", reality)
+	if strings.Contains(aliceReality, cs[1].UUID) {
+		t.Errorf("alice's link must not carry bob's uuid")
+	}
+}
+
+func TestShadowTLSLinkUsesTwoLayerKey(t *testing.T) {
+	srv := sampleServer()
+	c := clients()[0]
+	var stls string
+	for _, l := range ClientLinks(srv, c) {
+		if l.Kind == model.KindShadowTLS {
+			stls = l.URL
+		}
+	}
+	// user-info must decode to method:serverPSK:userPSK
+	want := ssTLSMethod + ":" + srv.SS2022ServerKey + ":" + c.SS2022Key
+	if !strings.Contains(stls, b64(want)) {
+		t.Errorf("shadowtls link must embed two-layer key %q (b64) in %s", want, stls)
 	}
 }
 
 func TestIPv6OnlyExposesOnlyCDN(t *testing.T) {
-	d := sampleDeployment()
-	d.IPv6Only = true
+	srv := sampleServer()
+	srv.IPv6Only = true
+	cs := clients()
 
-	ins := Inbounds(d)
+	ins := Inbounds(srv, cs)
 	if len(ins) != 1 || ins[0].Tag != "vless-cdn" {
 		t.Fatalf("ipv6-only should expose exactly the vless-cdn inbound, got %d", len(ins))
 	}
-
-	links := Links(d)
+	links := ClientLinks(srv, cs[0])
 	if len(links) != 1 || links[0].Kind != model.KindVLESSCDN {
 		t.Fatalf("ipv6-only should yield exactly the CDN link, got %d", len(links))
 	}
 }
 
 func TestShadowTLSInboundHasDetourPair(t *testing.T) {
-	d := sampleDeployment()
+	srv := sampleServer()
+	cs := clients()
 	var haveST, haveSS bool
-	for _, in := range Inbounds(d) {
+	for _, in := range Inbounds(srv, cs) {
 		switch in.Tag {
 		case "st-in":
 			haveST = true

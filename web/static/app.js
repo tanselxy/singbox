@@ -1,4 +1,4 @@
-// Dashboard interactions: copy links, service actions, log loading.
+// Panel interactions: copy links, service actions, client management, logs.
 (function () {
   "use strict";
   const prefix = document.body.dataset.prefix || "";
@@ -9,27 +9,27 @@
     setTimeout(() => (btn.textContent = old), 1500);
   }
 
-  // Copy node link to clipboard.
+  async function postJSON(path) {
+    const res = await fetch(prefix + path, { method: "POST" });
+    return res.json();
+  }
+
+  // Copy to clipboard.
   document.querySelectorAll(".copy").forEach((btn) => {
     btn.addEventListener("click", () => {
       navigator.clipboard.writeText(btn.dataset.url).then(() => toast(btn, "已复制"));
     });
   });
 
-  // Service actions (restart/stop/start).
+  // sing-box service actions.
   const stateEl = document.getElementById("svc-state");
   document.querySelectorAll("[data-action]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const action = btn.dataset.action;
       btn.disabled = true;
       try {
-        const res = await fetch(prefix + "/api/service/" + action, { method: "POST" });
-        const data = await res.json();
-        if (data.ok) {
-          setState(data.active);
-        } else {
-          alert("操作失败: " + (data.error || "未知错误"));
-        }
+        const data = await postJSON("/api/service/" + btn.dataset.action);
+        if (data.ok) setState(data.active);
+        else alert("操作失败: " + (data.error || "未知错误"));
       } catch (e) {
         alert("请求失败: " + e.message);
       } finally {
@@ -43,6 +43,54 @@
     stateEl.textContent = active ? "运行中" : "已停止";
     stateEl.className = "badge " + (active ? "ok" : "down");
   }
+
+  // Add-client form toggle.
+  const addBtn = document.getElementById("add-client");
+  const addForm = document.getElementById("add-form");
+  if (addBtn && addForm) {
+    addBtn.addEventListener("click", () => (addForm.hidden = !addForm.hidden));
+    document.getElementById("cancel-add").addEventListener("click", () => (addForm.hidden = true));
+    document.getElementById("create-client").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      const name = document.getElementById("new-name").value.trim();
+      const quota = document.getElementById("new-quota").value.trim();
+      if (!name) {
+        alert("请填写客户名");
+        e.target.disabled = false;
+        return;
+      }
+      try {
+        const body = new URLSearchParams({ name, quota_gb: quota });
+        const res = await fetch(prefix + "/api/clients", { method: "POST", body });
+        const data = await res.json();
+        if (data.ok) location.reload();
+        else alert("创建失败: " + (data.error || ""));
+      } catch (err) {
+        alert("请求失败: " + err.message);
+      } finally {
+        e.target.disabled = false;
+      }
+    });
+  }
+
+  // Per-client actions (enable/disable/delete/reset-traffic).
+  document.querySelectorAll("[data-client-action]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const action = btn.dataset.clientAction;
+      const id = btn.dataset.id;
+      if (action === "delete" && !confirm("确认删除该客户？其订阅将立即失效。")) return;
+      btn.disabled = true;
+      try {
+        const data = await postJSON("/api/clients/" + id + "/" + action);
+        if (data.ok) location.reload();
+        else alert("操作失败: " + (data.error || ""));
+      } catch (e) {
+        alert("请求失败: " + e.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
 
   // Load recent service logs.
   const loadBtn = document.getElementById("load-logs");
