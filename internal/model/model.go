@@ -135,4 +135,24 @@ type Client struct {
 	Enabled    bool   `json:"enabled"`
 	QuotaBytes int64  `json:"quota_bytes"` // 0 = unlimited
 	CreatedAt  int64  `json:"created_at"`  // unix seconds
+
+	// DeviceLimit is the intended max concurrent devices (0 = unlimited). It is
+	// stored and displayed but NOT enforced: sing-box exposes no per-user
+	// connection/IP information (clash_api connections lack the user, v2ray_api
+	// reports only traffic), so device counting is not currently possible.
+	DeviceLimit int `json:"device_limit"`
+
+	// ExpiresAt is when the client expires (unix seconds, 0 = never). Expired
+	// clients are treated as inactive: excluded from the config and their
+	// subscription 404s.
+	ExpiresAt int64 `json:"expires_at"`
+}
+
+// Active reports whether the client should currently be served: enabled and
+// not past its expiry.
+func (c Client) Active(now int64) bool {
+	if !c.Enabled {
+		return false
+	}
+	return c.ExpiresAt == 0 || now < c.ExpiresAt
 }

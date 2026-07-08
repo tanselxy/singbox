@@ -83,12 +83,53 @@ func TestGetByTokenAndEnabledFilter(t *testing.T) {
 		t.Errorf("token lookup returned wrong client")
 	}
 
-	enabled, err := s.EnabledClients()
+	active, err := s.ActiveClients(2000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(enabled) != 1 || enabled[0].Name != "alice" {
-		t.Errorf("EnabledClients should exclude disabled bob: %+v", enabled)
+	if len(active) != 1 || active[0].Name != "alice" {
+		t.Errorf("ActiveClients should exclude disabled bob: %+v", active)
+	}
+}
+
+func TestActiveClientsExcludesExpired(t *testing.T) {
+	s := openTemp(t)
+	live := sampleClient("live")
+	live.ExpiresAt = 5000
+	if _, err := s.CreateClient(live); err != nil {
+		t.Fatal(err)
+	}
+	expired := sampleClient("expired")
+	expired.ExpiresAt = 1000
+	if _, err := s.CreateClient(expired); err != nil {
+		t.Fatal(err)
+	}
+
+	// At now=3000: live (exp 5000) active, expired (exp 1000) not.
+	active, err := s.ActiveClients(3000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(active) != 1 || active[0].Name != "live" {
+		t.Errorf("ActiveClients should exclude expired: %+v", active)
+	}
+}
+
+func TestDeviceLimitAndExpiryRoundTrip(t *testing.T) {
+	s := openTemp(t)
+	c := sampleClient("carol")
+	c.DeviceLimit = 3
+	c.ExpiresAt = 1893456000
+	created, err := s.CreateClient(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetClient(created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.DeviceLimit != 3 || got.ExpiresAt != 1893456000 {
+		t.Errorf("device/expiry not persisted: %+v", got)
 	}
 }
 

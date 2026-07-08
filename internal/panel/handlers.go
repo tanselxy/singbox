@@ -31,6 +31,9 @@ type clientRow struct {
 	Used      string
 	Quota     string
 	OverQuota bool
+	Devices   string
+	Expiry    string
+	Expired   bool
 }
 
 type dashboardData struct {
@@ -47,12 +50,14 @@ type nodeView struct {
 }
 
 type clientDetailData struct {
-	Prefix string
-	Client model.Client
-	Nodes  []nodeView
-	SubURL string
-	Used   string
-	Quota  string
+	Prefix  string
+	Client  model.Client
+	Nodes   []nodeView
+	SubURL  string
+	Used    string
+	Quota   string
+	Devices string
+	Expiry  string
 }
 
 // ---- auth pages ----
@@ -106,6 +111,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "读取客户失败", http.StatusInternalServerError)
 		return
 	}
+	now := time.Now().Unix()
 	rows := make([]clientRow, 0, len(clients))
 	for _, c := range clients {
 		tr, _ := s.db.GetTraffic(c.ID)
@@ -117,6 +123,9 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			Used:      humanBytes(used),
 			Quota:     quotaLabel(c.QuotaBytes),
 			OverQuota: c.QuotaBytes > 0 && used >= c.QuotaBytes,
+			Devices:   deviceLabel(c.DeviceLimit),
+			Expiry:    expiryLabel(c.ExpiresAt),
+			Expired:   c.ExpiresAt > 0 && now >= c.ExpiresAt,
 		})
 	}
 	s.render(w, "dashboard.html", dashboardData{
@@ -152,12 +161,14 @@ func (s *Server) handleClientDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	tr, _ := s.db.GetTraffic(c.ID)
 	s.render(w, "client.html", clientDetailData{
-		Prefix: s.prefix,
-		Client: c,
-		Nodes:  nodes,
-		SubURL: fmt.Sprintf("https://%s%s/sub/%s", r.Host, s.prefix, c.SubToken),
-		Used:   humanBytes(tr.Up + tr.Down),
-		Quota:  quotaLabel(c.QuotaBytes),
+		Prefix:  s.prefix,
+		Client:  c,
+		Nodes:   nodes,
+		SubURL:  fmt.Sprintf("https://%s%s/sub/%s", r.Host, s.prefix, c.SubToken),
+		Used:    humanBytes(tr.Up + tr.Down),
+		Quota:   quotaLabel(c.QuotaBytes),
+		Devices: deviceLabel(c.DeviceLimit),
+		Expiry:  expiryLabel(c.ExpiresAt),
 	})
 }
 
@@ -173,7 +184,6 @@ func (s *Server) handleClientCreate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": "客户名不能为空"})
 		return
 	}
-	quota := parseQuotaGB(r.PostFormValue("quota_gb"))
 
 	c, err := secret.NewClient()
 	if err != nil {
@@ -182,7 +192,9 @@ func (s *Server) handleClientCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	c.Name = name
 	c.Enabled = true
-	c.QuotaBytes = quota
+	c.QuotaBytes = parseQuota(r.PostFormValue("quota"), r.PostFormValue("quota_unit"))
+	c.DeviceLimit = parseIntDefault(r.PostFormValue("device_limit"), 0)
+	c.ExpiresAt = parseExpiry(r.PostFormValue("expires_at"))
 	c.CreatedAt = time.Now().Unix()
 
 	if _, err := s.db.CreateClient(c); err != nil {
@@ -236,7 +248,7 @@ func (s *Server) handleClientAction(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSubscription(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	c, err := s.db.GetClientByToken(token)
-	if err != nil || !c.Enabled {
+	if err != nil || !c.Active(time.Now().Unix()) {
 		http.NotFound(w, r)
 		return
 	}
@@ -324,7 +336,7 @@ func (s *Server) applyConfig(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("读取服务器配置: %w", err)
 	}
-	clients, err := s.db.EnabledClients()
+	clients, err := s.db.ActiveClients(time.Now().Unix())
 	if err != nil {
 		return err
 	}
@@ -365,14 +377,60 @@ func quotaLabel(quotaBytes int64) string {
 	return humanBytes(quotaBytes)
 }
 
-func parseQuotaGB(s string) int64 {
+func deviceLabel(n int) string {
+	if n <= 0 {
+		return "不限"
+	}
+	return strconv.Itoa(n)
+}
+
+func expiryLabel(expiresAt int64) string {
+	if expiresAt <= 0 {
+		return "永久"
+	}
+	return time.Unix(expiresAt, 0).UTC().Format("2006-01-02")
+}
+
+// parseQuota converts a value + unit ("MB" or "GB") into bytes. 0 = unlimited.
+func parseQuota(value, unit string) int64 {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	n, err := strconv.ParseFloat(value, 64)
+	if err != nil || n <= 0 {
+		return 0
+	}
+	mult := float64(1024 * 1024 * 1024) // default GB
+	if strings.EqualFold(strings.TrimSpace(unit), "MB") {
+		mult = 1024 * 1024
+	}
+	return int64(n * mult)
+}
+
+func parseIntDefault(s string, def int) int {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return def
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return def
+	}
+	return n
+}
+
+// parseExpiry parses a yyyy-mm-dd date (client's local calendar day) into a unix
+// timestamp at end of that day (UTC). Empty means never expire (0).
+func parseExpiry(s string) int64 {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return 0
 	}
-	gb, err := strconv.ParseFloat(s, 64)
-	if err != nil || gb <= 0 {
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
 		return 0
 	}
-	return int64(gb * 1024 * 1024 * 1024)
+	// Expire at the end of the selected day.
+	return t.Add(24 * time.Hour).Unix()
 }

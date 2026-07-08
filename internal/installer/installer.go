@@ -170,7 +170,7 @@ func doInstall(ctx context.Context, srv model.Server, client *model.Client, res 
 	}
 	*client = created
 
-	clients, err := db.EnabledClients()
+	clients, err := db.ActiveClients(time.Now().Unix())
 	if err != nil {
 		return err
 	}

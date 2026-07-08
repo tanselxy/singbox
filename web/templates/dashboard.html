@@ -46,13 +46,22 @@
       </div>
       <div id="add-form" class="add-form" hidden>
         <input id="new-name" type="text" placeholder="客户名（唯一）">
-        <input id="new-quota" type="number" min="0" step="1" placeholder="流量配额 GB（0=不限）">
-        <button id="create-client">创建</button>
+        <span class="field">
+          <input id="new-quota" type="number" min="0" step="1" placeholder="流量配额">
+          <select id="new-quota-unit">
+            <option value="GB" selected>GB</option>
+            <option value="MB">MB</option>
+          </select>
+        </span>
+        <input id="new-devices" type="number" min="0" step="1" placeholder="设备数（0=不限）">
+        <input id="new-expires" type="date" title="到期日期（留空=永久）">
+        <button id="create-client">确认创建</button>
         <button id="cancel-add" class="link">取消</button>
       </div>
+      <p class="muted small">流量/到期到点会自动停用该客户；设备数目前仅记录，暂不自动限制。</p>
       <table class="clients">
         <thead>
-          <tr><th>名称</th><th>状态</th><th>已用</th><th>配额</th><th>操作</th></tr>
+          <tr><th>名称</th><th>状态</th><th>已用</th><th>配额</th><th>设备</th><th>到期</th><th>操作</th></tr>
         </thead>
         <tbody>
           {{range .Clients}}
@@ -63,6 +72,8 @@
             </td>
             <td class="{{if .OverQuota}}alert{{end}}">{{.Used}}</td>
             <td>{{.Quota}}</td>
+            <td>{{.Devices}}</td>
+            <td class="{{if .Expired}}alert{{end}}">{{.Expiry}}</td>
             <td class="row-actions">
               {{if .Enabled}}
               <button data-client-action="disable" data-id="{{.ID}}">停用</button>
@@ -74,7 +85,7 @@
             </td>
           </tr>
           {{else}}
-          <tr><td colspan="5" class="muted">还没有客户，点右上角新增。</td></tr>
+          <tr><td colspan="7" class="muted">还没有客户，点右上角新增。</td></tr>
           {{end}}
         </tbody>
       </table>

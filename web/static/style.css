@@ -165,4 +165,8 @@ table.clients th { color: var(--muted); font-weight: 600; }
   background: var(--bg);
   border-radius: 8px;
 }
-.add-form input { width: auto; flex: 1; min-width: 160px; margin: 0; }
+.add-form input { width: auto; flex: 1; min-width: 130px; margin: 0; }
+.add-form select { margin: 0; padding: 10px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); }
+.add-form .field { display: flex; gap: 6px; flex: 1; min-width: 160px; align-items: stretch; }
+.add-form .field input { flex: 1; min-width: 90px; }
+.small { font-size: 12px; margin: 4px 0 12px; }

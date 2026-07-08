@@ -54,13 +54,22 @@
       e.target.disabled = true;
       const name = document.getElementById("new-name").value.trim();
       const quota = document.getElementById("new-quota").value.trim();
+      const quotaUnit = document.getElementById("new-quota-unit").value;
+      const devices = document.getElementById("new-devices").value.trim();
+      const expires = document.getElementById("new-expires").value; // yyyy-mm-dd or ""
       if (!name) {
         alert("请填写客户名");
         e.target.disabled = false;
         return;
       }
       try {
-        const body = new URLSearchParams({ name, quota_gb: quota });
+        const body = new URLSearchParams({
+          name,
+          quota,
+          quota_unit: quotaUnit,
+          device_limit: devices,
+          expires_at: expires,
+        });
         const res = await fetch(prefix + "/api/clients", { method: "POST", body });
         const data = await res.json();
         if (data.ok) location.reload();

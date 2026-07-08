@@ -53,53 +53,54 @@ func (p *Poller) Run(ctx context.Context) {
 }
 
 func (p *Poller) pollOnce(ctx context.Context) error {
-	deltas, err := query(ctx)
-	if err != nil {
-		return err
-	}
-	if len(deltas) == 0 {
-		return nil
-	}
-
 	clients, err := p.db.ListClients()
 	if err != nil {
 		return err
 	}
-	byName := make(map[string]int64, len(clients))
-	for _, c := range clients {
-		byName[c.Name] = c.ID
+
+	// Update per-user traffic from v2ray_api (best-effort: if sing-box is
+	// restarting or the API is briefly unavailable, we still run enforcement
+	// below so expiry is applied even without traffic).
+	if deltas, err := query(ctx); err == nil {
+		byName := make(map[string]int64, len(clients))
+		for _, c := range clients {
+			byName[c.Name] = c.ID
+		}
+		now := time.Now().Unix()
+		for name, d := range deltas {
+			if id, ok := byName[name]; ok && (d.up != 0 || d.down != 0) {
+				_ = p.db.AddTraffic(id, d.up, d.down, now)
+			}
+		}
 	}
 
-	now := time.Now().Unix()
-	for name, d := range deltas {
-		id, ok := byName[name]
-		if !ok {
-			continue
-		}
-		if d.up != 0 || d.down != 0 {
-			_ = p.db.AddTraffic(id, d.up, d.down, now)
-		}
-	}
-
-	p.enforceQuotas(ctx, clients)
+	p.enforce_(ctx, clients)
 	return nil
 }
 
-// enforceQuotas disables any enabled client whose cumulative usage has reached
-// its quota.
-func (p *Poller) enforceQuotas(ctx context.Context, clients []model.Client) {
+// enforce_ disables any enabled client that has reached its quota or passed its
+// expiry, triggering a config regeneration via the enforce callback.
+func (p *Poller) enforce_(ctx context.Context, clients []model.Client) {
+	now := time.Now().Unix()
 	for _, c := range clients {
-		if !c.Enabled || c.QuotaBytes <= 0 {
+		if !c.Enabled || p.enforce == nil {
 			continue
 		}
-		tr, err := p.db.GetTraffic(c.ID)
-		if err != nil {
-			continue
-		}
-		if tr.Up+tr.Down >= c.QuotaBytes && p.enforce != nil {
+		overQuota := c.QuotaBytes > 0 && p.usage(c.ID) >= c.QuotaBytes
+		expired := c.ExpiresAt > 0 && now >= c.ExpiresAt
+		if overQuota || expired {
 			_ = p.enforce(ctx, c.ID)
 		}
 	}
+}
+
+// usage returns a client's cumulative traffic (up+down).
+func (p *Poller) usage(clientID int64) int64 {
+	tr, err := p.db.GetTraffic(clientID)
+	if err != nil {
+		return 0
+	}
+	return tr.Up + tr.Down
 }
 
 type delta struct{ up, down int64 }

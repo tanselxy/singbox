@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	_ "modernc.org/sqlite"
 
@@ -50,7 +51,9 @@ CREATE TABLE IF NOT EXISTS clients (
     sub_token          TEXT NOT NULL UNIQUE,
     enabled            INTEGER NOT NULL DEFAULT 1,
     quota_bytes        INTEGER NOT NULL DEFAULT 0,
-    created_at         INTEGER NOT NULL
+    created_at         INTEGER NOT NULL,
+    device_limit       INTEGER NOT NULL DEFAULT 0,
+    expires_at         INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS traffic (
     client_id  INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
@@ -61,15 +64,25 @@ CREATE TABLE IF NOT EXISTS traffic (
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
+	// Add columns introduced after the initial schema, for databases created by
+	// an earlier version. Duplicate-column errors are expected and ignored.
+	for _, col := range []string{
+		"ALTER TABLE clients ADD COLUMN device_limit INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE clients ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0",
+	} {
+		if _, err := s.db.Exec(col); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return fmt.Errorf("migrate: %w", err)
+		}
+	}
 	return nil
 }
 
 // CreateClient inserts a client and returns it with its assigned ID.
 func (s *Store) CreateClient(c model.Client) (model.Client, error) {
 	res, err := s.db.Exec(
-		`INSERT INTO clients (name, uuid, password, ss2022_key, shadowtls_password, sub_token, enabled, quota_bytes, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.Name, c.UUID, c.Password, c.SS2022Key, c.ShadowTLSPassword, c.SubToken, boolInt(c.Enabled), c.QuotaBytes, c.CreatedAt,
+		`INSERT INTO clients (name, uuid, password, ss2022_key, shadowtls_password, sub_token, enabled, quota_bytes, created_at, device_limit, expires_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.Name, c.UUID, c.Password, c.SS2022Key, c.ShadowTLSPassword, c.SubToken, boolInt(c.Enabled), c.QuotaBytes, c.CreatedAt, c.DeviceLimit, c.ExpiresAt,
 	)
 	if err != nil {
 		return model.Client{}, fmt.Errorf("create client: %w", err)
@@ -85,7 +98,7 @@ func (s *Store) CreateClient(c model.Client) (model.Client, error) {
 	return c, nil
 }
 
-const clientColumns = `id, name, uuid, password, ss2022_key, shadowtls_password, sub_token, enabled, quota_bytes, created_at`
+const clientColumns = `id, name, uuid, password, ss2022_key, shadowtls_password, sub_token, enabled, quota_bytes, created_at, device_limit, expires_at`
 
 // ListClients returns all clients ordered by id.
 func (s *Store) ListClients() ([]model.Client, error) {
@@ -105,15 +118,16 @@ func (s *Store) ListClients() ([]model.Client, error) {
 	return out, rows.Err()
 }
 
-// EnabledClients returns only enabled clients.
-func (s *Store) EnabledClients() ([]model.Client, error) {
+// ActiveClients returns clients that should currently be served: enabled and
+// not past their expiry (evaluated against now, unix seconds).
+func (s *Store) ActiveClients(now int64) ([]model.Client, error) {
 	all, err := s.ListClients()
 	if err != nil {
 		return nil, err
 	}
 	out := make([]model.Client, 0, len(all))
 	for _, c := range all {
-		if c.Enabled {
+		if c.Active(now) {
 			out = append(out, c)
 		}
 	}
@@ -202,7 +216,8 @@ func scanClient(sc scanner) (model.Client, error) {
 	var c model.Client
 	var enabled int
 	err := sc.Scan(&c.ID, &c.Name, &c.UUID, &c.Password, &c.SS2022Key,
-		&c.ShadowTLSPassword, &c.SubToken, &enabled, &c.QuotaBytes, &c.CreatedAt)
+		&c.ShadowTLSPassword, &c.SubToken, &enabled, &c.QuotaBytes, &c.CreatedAt,
+		&c.DeviceLimit, &c.ExpiresAt)
 	if err != nil {
 		return model.Client{}, err
 	}
