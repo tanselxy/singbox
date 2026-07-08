@@ -170,3 +170,16 @@ table.clients th { color: var(--muted); font-weight: 600; }
 .add-form .field { display: flex; gap: 6px; flex: 1; min-width: 160px; align-items: stretch; }
 .add-form .field input { flex: 1; min-width: 90px; }
 .small { font-size: 12px; margin: 4px 0 12px; }
+
+/* system & security rows */
+.sys-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.sys-row:last-child { border-bottom: none; }
+.sys-row .badge { margin-top: 4px; }

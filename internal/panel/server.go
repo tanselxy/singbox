@@ -72,6 +72,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST "+p+"/api/clients", s.protected(s.handleClientCreate))
 	mux.HandleFunc("POST "+p+"/api/clients/{id}/{action}", s.protected(s.handleClientAction))
 
+	// System optimization / security.
+	mux.HandleFunc("POST "+p+"/api/system/{action}", s.protected(s.handleSystemAction))
+
 	// Subscription endpoint: token-authenticated (no login), for client apps.
 	mux.HandleFunc("GET "+p+"/sub/{token}", s.handleSubscription)
 

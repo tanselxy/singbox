@@ -92,6 +92,34 @@
     </section>
 
     <section class="card">
+      <h3>系统与安全</h3>
+      <div class="sys-row">
+        <div>
+          <div class="muted">BBR + TCP 优化</div>
+          <span class="badge {{if .System.BBR}}ok{{else}}down{{end}}">{{if .System.BBR}}已开启{{else}}未开启{{end}}</span>
+        </div>
+        <button data-system="bbr" {{if .System.BBR}}disabled{{end}}>开启 BBR</button>
+      </div>
+      <div class="sys-row">
+        <div>
+          <div class="muted">fail2ban（SSH 防爆破）</div>
+          <span class="badge {{if .System.Fail2ban}}ok{{else}}down{{end}}">{{if .System.Fail2ban}}运行中{{else}}未安装{{end}}</span>
+        </div>
+        <button data-system="fail2ban" {{if .System.Fail2ban}}disabled{{end}}>安装并启用</button>
+      </div>
+      <div class="sys-row">
+        <div>
+          <div class="muted">SSH 端口（当前 {{.System.SSHPort}}）</div>
+          <span class="small muted">改端口有风险，务必保持当前 SSH 会话不要关，改完用新端口测试能连上再退出。</span>
+        </div>
+        <span class="field" style="flex:0 0 auto">
+          <input id="ssh-port" type="number" min="1" max="65535" placeholder="新端口" style="min-width:110px">
+          <button data-system="ssh-port" class="warn">修改</button>
+        </span>
+      </div>
+    </section>
+
+    <section class="card">
       <div class="node-head">
         <h3>服务日志</h3>
         <button id="load-logs">加载最近日志</button>

@@ -41,6 +41,13 @@ type dashboardData struct {
 	ServerIP string
 	Active   bool
 	Clients  []clientRow
+	System   systemStatus
+}
+
+type systemStatus struct {
+	BBR      bool
+	Fail2ban bool
+	SSHPort  int
 }
 
 type nodeView struct {
@@ -133,7 +140,47 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		ServerIP: srv.ServerIP,
 		Active:   singbox.IsActive(r.Context()),
 		Clients:  rows,
+		System: systemStatus{
+			BBR:      system.BBREnabled(r.Context()),
+			Fail2ban: system.Fail2banActive(r.Context()),
+			SSHPort:  system.CurrentSSHPort(),
+		},
 	})
+}
+
+// handleSystemAction applies a system optimization / security action.
+func (s *Server) handleSystemAction(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var err error
+	switch r.PathValue("action") {
+	case "bbr":
+		err = system.OptimizeNetwork(ctx)
+	case "fail2ban":
+		err = system.SetupFail2ban(ctx, detectManager())
+	case "ssh-port":
+		port, perr := strconv.Atoi(strings.TrimSpace(r.PostFormValue("port")))
+		if perr != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": "端口格式错误"})
+			return
+		}
+		err = system.ChangeSSHPort(ctx, port)
+	default:
+		http.Error(w, "unknown action", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+// detectManager returns the host package manager, defaulting to apt.
+func detectManager() system.PackageManager {
+	if info, err := system.Detect(); err == nil {
+		return info.Manager
+	}
+	return system.APT
 }
 
 // ---- client detail: links, QR, subscription ----

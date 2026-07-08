@@ -101,6 +101,38 @@
     });
   });
 
+  // System optimization / security actions.
+  document.querySelectorAll("[data-system]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const action = btn.dataset.system;
+      let body;
+      if (action === "ssh-port") {
+        const port = document.getElementById("ssh-port").value.trim();
+        if (!port) {
+          alert("请填写新的 SSH 端口");
+          return;
+        }
+        if (!confirm("即将把 SSH 端口改为 " + port + "。请勿关闭当前会话，改完先用新端口测试！确定继续？")) return;
+        body = new URLSearchParams({ port });
+      }
+      btn.disabled = true;
+      try {
+        const res = await fetch(prefix + "/api/system/" + action, { method: "POST", body });
+        const data = await res.json();
+        if (data.ok) {
+          alert("操作成功");
+          location.reload();
+        } else {
+          alert("操作失败: " + (data.error || ""));
+          btn.disabled = false;
+        }
+      } catch (e) {
+        alert("请求失败: " + e.message);
+        btn.disabled = false;
+      }
+    });
+  });
+
   // Load recent service logs.
   const loadBtn = document.getElementById("load-logs");
   if (loadBtn) {
