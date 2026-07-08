@@ -1,0 +1,31 @@
+// Minimal gRPC contract for sing-box's V2Ray stats service, sufficient to poll
+// per-user traffic counters. The gRPC service is registered by sing-box under
+// the V2Ray-compatible name "v2ray.core.app.stats.command.StatsService" (its
+// .proto file's package differs, but the runtime service name is this one), so
+// this package name and the field numbers must match for wire compatibility.
+// This definition and the generated Go code are our own.
+syntax = "proto3";
+
+package v2ray.core.app.stats.command;
+
+option go_package = "github.com/tanselxy/singbox/internal/v2rayapi;v2rayapi";
+
+message Stat {
+  string name = 1;
+  int64 value = 2;
+}
+
+message QueryStatsRequest {
+  string pattern = 1;
+  bool reset = 2;
+  repeated string patterns = 3;
+  bool regexp = 4;
+}
+
+message QueryStatsResponse {
+  repeated Stat stat = 1;
+}
+
+service StatsService {
+  rpc QueryStats(QueryStatsRequest) returns (QueryStatsResponse) {}
+}

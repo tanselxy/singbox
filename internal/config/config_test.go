@@ -9,10 +9,9 @@ import (
 
 func TestStaticBlocksAreValidJSON(t *testing.T) {
 	for name, block := range map[string]string{
-		"dns":          dnsBlock,
-		"outbounds":    outboundsBlock,
-		"route":        routeBlock,
-		"experimental": experimentalBlock,
+		"dns":       dnsBlock,
+		"outbounds": outboundsBlock,
+		"route":     routeBlock,
 	} {
 		if !json.Valid([]byte(block)) {
 			t.Errorf("%s block is not valid JSON", name)
@@ -48,6 +47,12 @@ func TestMarshalProducesValidConfig(t *testing.T) {
 			ClashAPI struct {
 				ExternalController string `json:"external_controller"`
 			} `json:"clash_api"`
+			V2RayAPI struct {
+				Stats struct {
+					Enabled bool     `json:"enabled"`
+					Users   []string `json:"users"`
+				} `json:"stats"`
+			} `json:"v2ray_api"`
 		} `json:"experimental"`
 	}
 	if err := json.Unmarshal(b, &doc); err != nil {
@@ -58,5 +63,11 @@ func TestMarshalProducesValidConfig(t *testing.T) {
 	}
 	if doc.Experimental.ClashAPI.ExternalController != ClashAPIAddr {
 		t.Errorf("clash_api controller = %q, want %q", doc.Experimental.ClashAPI.ExternalController, ClashAPIAddr)
+	}
+	if !doc.Experimental.V2RayAPI.Stats.Enabled {
+		t.Error("v2ray_api stats should be enabled")
+	}
+	if len(doc.Experimental.V2RayAPI.Stats.Users) != 1 || doc.Experimental.V2RayAPI.Stats.Users[0] != "alice" {
+		t.Errorf("v2ray_api stats.users = %v, want [alice]", doc.Experimental.V2RayAPI.Stats.Users)
 	}
 }

@@ -32,19 +32,16 @@ const outboundsBlock = `[
   { "type": "direct", "tag": "direct", "domain_resolver": "local" }
 ]`
 
-// Clash API endpoint, bound to loopback so only the local traffic poller can
-// reach it. The secret is shared with internal/traffic.
+// Local API endpoints, bound to loopback so only the on-host traffic poller can
+// reach them.
 const (
 	ClashAPIAddr   = "127.0.0.1:9090"
 	ClashAPISecret = "singbox-panel-local"
-)
 
-const experimentalBlock = `{
-  "clash_api": {
-    "external_controller": "` + ClashAPIAddr + `",
-    "secret": "` + ClashAPISecret + `"
-  }
-}`
+	// V2RayAPIAddr is the gRPC stats endpoint used for per-user traffic. It
+	// requires a sing-box built with the with_v2ray_api tag.
+	V2RayAPIAddr = "127.0.0.1:8080"
+)
 
 const routeBlock = `{
   "default_domain_resolver": "local",
@@ -67,8 +64,33 @@ func Build(srv model.Server, clients []model.Client) sbschema.Config {
 		Inbounds:     protocol.Inbounds(srv, clients),
 		Outbounds:    json.RawMessage(outboundsBlock),
 		Route:        json.RawMessage(routeBlock),
-		Experimental: json.RawMessage(experimentalBlock),
+		Experimental: experimental(clients),
 	}
+}
+
+// experimental builds the experimental block: the clash_api plus a v2ray_api
+// stats service listing every client's user name so per-user traffic counters
+// are tracked.
+func experimental(clients []model.Client) json.RawMessage {
+	users := make([]string, 0, len(clients))
+	for _, c := range clients {
+		users = append(users, c.Name)
+	}
+	block := map[string]any{
+		"clash_api": map[string]any{
+			"external_controller": ClashAPIAddr,
+			"secret":              ClashAPISecret,
+		},
+		"v2ray_api": map[string]any{
+			"listen": V2RayAPIAddr,
+			"stats": map[string]any{
+				"enabled": true,
+				"users":   users,
+			},
+		},
+	}
+	b, _ := json.Marshal(block)
+	return b
 }
 
 // Marshal renders a configuration to indented config.json bytes.

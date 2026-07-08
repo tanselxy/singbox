@@ -12,8 +12,12 @@ import (
 
 	"github.com/tanselxy/singbox/internal/state"
 	"github.com/tanselxy/singbox/internal/store"
+	"github.com/tanselxy/singbox/internal/traffic"
 	"github.com/tanselxy/singbox/web"
 )
+
+// trafficInterval is how often per-user traffic is polled from sing-box.
+const trafficInterval = 30 * time.Second
 
 // Server is the resident HTTPS control panel.
 type Server struct {
@@ -85,6 +89,16 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		TLSConfig:         &tls.Config{MinVersion: tls.VersionTLS12},
 	}
+
+	// Start the per-user traffic poller. On reaching quota, disable the client
+	// and regenerate the config.
+	poller := traffic.NewPoller(s.db, trafficInterval, func(ctx context.Context, clientID int64) error {
+		if err := s.db.SetEnabled(clientID, false); err != nil {
+			return err
+		}
+		return s.applyConfig(ctx)
+	})
+	go poller.Run(ctx)
 
 	errCh := make(chan error, 1)
 	go func() {

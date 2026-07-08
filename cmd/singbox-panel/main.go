@@ -33,6 +33,8 @@ func main() {
 		err = runServe(ctx, args)
 	case "uninstall":
 		err = runUninstall(ctx, args)
+	case "_stats": // hidden: dump v2ray_api user counters for debugging
+		err = runStatsDump(ctx)
 	case "version", "-v", "--version":
 		fmt.Printf("singbox-panel %s\n", version)
 	case "help", "-h", "--help":
