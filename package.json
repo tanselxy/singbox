@@ -1,0 +1,12 @@
+{
+  "scripts": {
+    "build:dashboard": "esbuild web/react/dashboard.jsx --bundle --format=iife --global-name=DashboardApp --outfile=web/static/dashboard-react.js --loader:.jsx=jsx --jsx=automatic",
+    "build:dashboard:min": "npm run build:dashboard -- --minify"
+  },
+  "dependencies": {
+    "esbuild": "^0.25.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {}
+}

@@ -65,10 +65,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST "+p+"/logout", s.handleLogout)
 
 	mux.HandleFunc("GET "+p+"/dashboard", s.protected(s.handleDashboard))
+	mux.HandleFunc("GET "+p+"/dashboard/{view}", s.protected(s.handleDashboard))
 	mux.HandleFunc("GET "+p+"/client/{id}", s.protected(s.handleClientDetail))
 	mux.HandleFunc("GET "+p+"/tools", s.protected(s.handleTools))
 	mux.HandleFunc("GET "+p+"/qr", s.protected(s.handleQR))
 	mux.HandleFunc("GET "+p+"/api/status", s.protected(s.handleStatus))
+	mux.HandleFunc("GET "+p+"/api/dashboard", s.protected(s.handleDashboardAPI))
 	mux.HandleFunc("GET "+p+"/api/logs", s.protected(s.handleLogs))
 	mux.HandleFunc("POST "+p+"/api/service/{action}", s.protected(s.handleServiceAction))
 
@@ -85,6 +87,7 @@ func (s *Server) Handler() http.Handler {
 
 	// Node management (master side).
 	mux.HandleFunc("GET "+p+"/nodes", s.protected(s.handleNodesPage))
+	mux.HandleFunc("GET "+p+"/api/node-metrics", s.protected(s.handleNodeMetricsAPI))
 	mux.HandleFunc("POST "+p+"/api/nodes", s.protected(s.handleNodeCreate))
 	mux.HandleFunc("POST "+p+"/api/nodes/{id}/delete", s.protected(s.handleNodeDelete))
 

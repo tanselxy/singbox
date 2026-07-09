@@ -19,127 +19,19 @@
     </nav>
   </header>
 
-  <main>
+  <div id="dashboard-root" class="dashboard-root" data-prefix="{{.Prefix}}" data-view="{{.View}}">
     <section class="card">
-      <div class="status-row">
-        <div>
-          <div class="muted">服务器</div>
-          <div class="mono">{{.ServerIP}}</div>
-        </div>
-        <div>
-          <div class="muted">sing-box 状态</div>
-          <div id="svc-state" class="badge {{if .Active}}ok{{else}}down{{end}}">
-            {{if .Active}}运行中{{else}}已停止{{end}}
-          </div>
-        </div>
-        <div class="actions">
-          <button data-action="restart">重启</button>
-          <button data-action="stop" class="warn">停止</button>
-          <button data-action="start">启动</button>
-        </div>
+      <h1>控制台加载中</h1>
+      <p class="muted">正在加载 React 控制台。</p>
+      <noscript>
+        <p class="alert">浏览器需要启用 JavaScript 才能使用控制台。</p>
+      </noscript>
+      <div class="sr-fallback">
+        {{range .Clients}}{{.Name}} {{end}}
       </div>
     </section>
+  </div>
 
-    <section class="card">
-      <div class="node-head">
-        <h3>客户</h3>
-        <button id="add-client">+ 新增客户</button>
-      </div>
-      <div id="add-form" class="add-form" hidden>
-        <input id="new-name" type="text" placeholder="客户名（唯一）">
-        <span class="field">
-          <input id="new-quota" type="number" min="0" step="1" placeholder="流量配额">
-          <select id="new-quota-unit">
-            <option value="GB" selected>GB</option>
-            <option value="MB">MB</option>
-          </select>
-        </span>
-        <input id="new-devices" type="number" min="0" step="1" placeholder="设备数（0=不限）">
-        <input id="new-expires" type="date" title="到期日期（留空=永久）">
-        <button id="create-client">确认创建</button>
-        <button id="cancel-add" class="link">取消</button>
-      </div>
-      <p class="muted small">流量/到期到点会自动停用该客户；设备数目前仅记录，暂不自动限制。</p>
-      <table class="clients">
-        <thead>
-          <tr><th>名称</th><th>状态</th><th>已用</th><th>配额</th><th>设备</th><th>到期</th><th>操作</th></tr>
-        </thead>
-        <tbody>
-          {{range .Clients}}
-          <tr data-id="{{.ID}}">
-            <td><a href="{{$.Prefix}}/client/{{.ID}}">{{.Name}}</a></td>
-            <td>
-              <span class="badge {{if .Enabled}}ok{{else}}down{{end}}">{{if .Enabled}}启用{{else}}停用{{end}}</span>
-            </td>
-            <td class="{{if .OverQuota}}alert{{end}}">{{.Used}}</td>
-            <td>{{.Quota}}</td>
-            <td>{{.Devices}}</td>
-            <td class="{{if .Expired}}alert{{end}}">{{.Expiry}}</td>
-            <td class="row-actions">
-              {{if .Enabled}}
-              <button data-client-action="disable" data-id="{{.ID}}">停用</button>
-              {{else}}
-              <button data-client-action="enable" data-id="{{.ID}}">启用</button>
-              {{end}}
-              <button data-client-action="reset-traffic" data-id="{{.ID}}">清零流量</button>
-              <button data-client-action="delete" data-id="{{.ID}}" class="warn">删除</button>
-            </td>
-          </tr>
-          {{else}}
-          <tr><td colspan="7" class="muted">还没有客户，点右上角新增。</td></tr>
-          {{end}}
-        </tbody>
-      </table>
-    </section>
-
-    <section class="card">
-      <h3>系统与安全</h3>
-      <div class="sys-row">
-        <div>
-          <div class="muted">面板版本</div>
-          <span id="ver-current" class="mono">{{.Version}}</span>
-          <span id="ver-latest" class="small muted"></span>
-        </div>
-        <span class="field" style="flex:0 0 auto">
-          <button id="check-update">检查更新</button>
-          <button id="do-upgrade" hidden>升级到新版</button>
-        </span>
-      </div>
-      <div class="sys-row">
-        <div>
-          <div class="muted">BBR + TCP 优化</div>
-          <span class="badge {{if .System.BBR}}ok{{else}}down{{end}}">{{if .System.BBR}}已开启{{else}}未开启{{end}}</span>
-        </div>
-        <button data-system="bbr" {{if .System.BBR}}disabled{{end}}>开启 BBR</button>
-      </div>
-      <div class="sys-row">
-        <div>
-          <div class="muted">fail2ban（SSH 防爆破）</div>
-          <span class="badge {{if .System.Fail2ban}}ok{{else}}down{{end}}">{{if .System.Fail2ban}}运行中{{else}}未安装{{end}}</span>
-        </div>
-        <button data-system="fail2ban" {{if .System.Fail2ban}}disabled{{end}}>安装并启用</button>
-      </div>
-      <div class="sys-row">
-        <div>
-          <div class="muted">SSH 端口（当前 {{.System.SSHPort}}）</div>
-          <span class="small muted">改端口有风险，务必保持当前 SSH 会话不要关，改完用新端口测试能连上再退出。</span>
-        </div>
-        <span class="field" style="flex:0 0 auto">
-          <input id="ssh-port" type="number" min="1" max="65535" placeholder="新端口" style="min-width:110px">
-          <button data-system="ssh-port" class="warn">修改</button>
-        </span>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="node-head">
-        <h3>服务日志</h3>
-        <button id="load-logs">加载最近日志</button>
-      </div>
-      <pre id="logs" class="logs muted">点击上方按钮加载。</pre>
-    </section>
-  </main>
-
-  <script src="{{.Prefix}}/static/app.js"></script>
+  <script src="{{.Prefix}}/static/dashboard-react.js"></script>
 </body>
 </html>

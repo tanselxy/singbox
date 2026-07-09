@@ -43,6 +43,15 @@ type dashboardData struct {
 	Clients  []clientRow
 	System   systemStatus
 	Version  string
+	View     string
+	Summary  dashboardSummary
+}
+
+type dashboardSummary struct {
+	TotalClients   int
+	EnabledClients int
+	LimitedClients int
+	ExpiredClients int
 }
 
 type systemStatus struct {
@@ -113,17 +122,56 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 // ---- dashboard: client list ----
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	view := r.PathValue("view")
+	if view == "" {
+		view = "overview"
+	}
+	switch view {
+	case "overview", "clients", "monitoring", "system", "logs":
+	default:
+		http.NotFound(w, r)
+		return
+	}
+
+	data, err := s.dashboardData(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	data.View = view
+	s.render(w, "dashboard.html", data)
+}
+
+func (s *Server) handleDashboardAPI(w http.ResponseWriter, r *http.Request) {
+	data, err := s.dashboardData(r.Context())
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "dashboard": data})
+}
+
+func (s *Server) dashboardData(ctx context.Context) (dashboardData, error) {
 	srv, _ := state.LoadServer()
 	clients, err := s.db.ListClients()
 	if err != nil {
-		http.Error(w, "读取客户失败", http.StatusInternalServerError)
-		return
+		return dashboardData{}, fmt.Errorf("读取客户失败")
 	}
 	now := time.Now().Unix()
 	rows := make([]clientRow, 0, len(clients))
+	summary := dashboardSummary{TotalClients: len(clients)}
 	for _, c := range clients {
 		tr, _ := s.db.GetTraffic(c.ID)
 		used := tr.Up + tr.Down
+		if c.Enabled {
+			summary.EnabledClients++
+		}
+		if c.QuotaBytes > 0 {
+			summary.LimitedClients++
+		}
+		if c.ExpiresAt > 0 && now >= c.ExpiresAt {
+			summary.ExpiredClients++
+		}
 		rows = append(rows, clientRow{
 			ID:        c.ID,
 			Name:      c.Name,
@@ -136,18 +184,19 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			Expired:   c.ExpiresAt > 0 && now >= c.ExpiresAt,
 		})
 	}
-	s.render(w, "dashboard.html", dashboardData{
+	return dashboardData{
 		Prefix:   s.prefix,
 		ServerIP: srv.ServerIP,
-		Active:   singbox.IsActive(r.Context()),
+		Active:   singbox.IsActive(ctx),
 		Clients:  rows,
 		System: systemStatus{
-			BBR:      system.BBREnabled(r.Context()),
-			Fail2ban: system.Fail2banActive(r.Context()),
+			BBR:      system.BBREnabled(ctx),
+			Fail2ban: system.Fail2banActive(ctx),
 			SSHPort:  system.CurrentSSHPort(),
 		},
 		Version: Version,
-	})
+		Summary: summary,
+	}, nil
 }
 
 // handleSystemAction applies a system optimization / security action.

@@ -9,6 +9,9 @@
 *.out
 /vendor/
 
+# Frontend dependencies
+/node_modules/
+
 # Local data / runtime
 *.db
 *.db-journal

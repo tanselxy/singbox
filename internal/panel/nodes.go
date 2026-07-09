@@ -124,32 +124,11 @@ type nodeRow struct {
 }
 
 func (s *Server) handleNodesPage(w http.ResponseWriter, r *http.Request) {
-	nodes, err := s.db.ListNodes()
+	rows, err := s.nodeRows(r.Context())
 	if err != nil {
 		http.Error(w, "读取节点失败", http.StatusInternalServerError)
 		return
 	}
-	rows := make([]nodeRow, len(nodes))
-	var wg sync.WaitGroup
-	for i, n := range nodes {
-		rows[i] = nodeRow{ID: n.ID, Name: n.Name, Address: n.Address}
-		wg.Add(1)
-		go func(i int, n model.Node) {
-			defer wg.Done()
-			c := agent.New(n.Address, n.Token)
-			cctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-			defer cancel()
-			m, err := c.Metrics(cctx)
-			if err != nil {
-				return
-			}
-			rows[i].Online = true
-			rows[i].CPU = strconv.FormatFloat(m.CPUPercent, 'f', 1, 64) + "%"
-			rows[i].Mem = metrics.Format(m.MemUsed) + " / " + metrics.Format(m.MemTotal)
-			rows[i].Disk = metrics.Format(m.DiskUsed) + " / " + metrics.Format(m.DiskTotal)
-		}(i, n)
-	}
-	wg.Wait()
 
 	srv, _ := state.LoadServer()
 	host := srv.ServerIP
@@ -165,6 +144,44 @@ func (s *Server) handleNodesPage(w http.ResponseWriter, r *http.Request) {
 		"AccessCode":   encodeAccessCode(selfURL, s.cfg.AgentToken),
 		"Managed":      s.cfg.Managed,
 	})
+}
+
+func (s *Server) handleNodeMetricsAPI(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.nodeRows(r.Context())
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "读取节点失败"})
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "nodes": rows})
+}
+
+func (s *Server) nodeRows(ctx context.Context) ([]nodeRow, error) {
+	nodes, err := s.db.ListNodes()
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]nodeRow, len(nodes))
+	var wg sync.WaitGroup
+	for i, n := range nodes {
+		rows[i] = nodeRow{ID: n.ID, Name: n.Name, Address: n.Address}
+		wg.Add(1)
+		go func(i int, n model.Node) {
+			defer wg.Done()
+			c := agent.New(n.Address, n.Token)
+			cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			m, err := c.Metrics(cctx)
+			if err != nil {
+				return
+			}
+			rows[i].Online = true
+			rows[i].CPU = strconv.FormatFloat(m.CPUPercent, 'f', 1, 64) + "%"
+			rows[i].Mem = metrics.Format(m.MemUsed) + " / " + metrics.Format(m.MemTotal)
+			rows[i].Disk = metrics.Format(m.DiskUsed) + " / " + metrics.Format(m.DiskTotal)
+		}(i, n)
+	}
+	wg.Wait()
+	return rows, nil
 }
 
 func (s *Server) handleNodeCreate(w http.ResponseWriter, r *http.Request) {
