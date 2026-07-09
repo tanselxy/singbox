@@ -171,11 +171,21 @@ func TestSubscriptionByToken(t *testing.T) {
 	if got := resp.Header.Get("Profile-Title"); got == "" {
 		t.Fatal("subscription should include profile title")
 	}
+	if got := resp.Header.Get("X-Subscription-Usage"); !strings.Contains(got, "当前已使用") || !strings.Contains(got, "流量总额度") {
+		t.Fatalf("subscription should include human usage title, got %q", got)
+	}
 
 	// Unknown token → 404.
 	resp2, _ := http.Get(ts.URL + "/abc/sub/nope")
 	if resp2.StatusCode != http.StatusNotFound {
 		t.Errorf("unknown token should 404, got %d", resp2.StatusCode)
+	}
+}
+
+func TestSubscriptionUsageTitleUsesMBBelowGB(t *testing.T) {
+	got := subscriptionUsageTitle(512*1024*1024, 900*1024*1024)
+	if got != "当前已使用512.00 MB流量/流量总额度900.00 MB" {
+		t.Fatalf("title = %q", got)
 	}
 }
 

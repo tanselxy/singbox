@@ -463,11 +463,33 @@ func (s *Server) writeSubscriptionHeaders(w http.ResponseWriter, c model.Client)
 	if c.ExpiresAt > 0 {
 		parts = append(parts, fmt.Sprintf("expire=%d", c.ExpiresAt))
 	}
+	display := subscriptionUsageTitle(used, c.QuotaBytes)
 	w.Header().Set("Subscription-Userinfo", strings.Join(parts, "; "))
-	w.Header().Set("Profile-Title", url.QueryEscape(c.Name))
+	w.Header().Set("Profile-Title", url.QueryEscape(display))
 	w.Header().Set("Profile-Update-Interval", "24")
-	w.Header().Set("X-Subscription-Used", humanBytes(used))
-	w.Header().Set("X-Subscription-Total", quotaLabel(c.QuotaBytes))
+	w.Header().Set("X-Subscription-Usage", display)
+}
+
+func subscriptionUsageTitle(usedBytes, quotaBytes int64) string {
+	total := "不限"
+	if quotaBytes > 0 {
+		total = compactTrafficUnit(quotaBytes)
+	}
+	return fmt.Sprintf("当前已使用%s流量/流量总额度%s", compactTrafficUnit(usedBytes), total)
+}
+
+func compactTrafficUnit(n int64) string {
+	const (
+		mb = int64(1024 * 1024)
+		gb = int64(1024 * 1024 * 1024)
+	)
+	if n < mb {
+		return "0 MB"
+	}
+	if n < gb {
+		return fmt.Sprintf("%.2f MB", float64(n)/float64(mb))
+	}
+	return fmt.Sprintf("%.2f GB", float64(n)/float64(gb))
 }
 
 // ---- misc ----
