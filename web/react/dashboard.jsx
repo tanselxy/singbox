@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { BrowserRouter, Link, Navigate, NavLink, Route, Routes } from "react-router";
 
 const VIEW_META = {
   overview: { label: "总览", eyebrow: "Overview", title: "服务总览" },
@@ -9,14 +10,8 @@ const VIEW_META = {
   logs: { label: "运行日志", eyebrow: "Logs", title: "运行日志" },
 };
 
-function initialView(root) {
-  const fromPath = window.location.pathname.split("/dashboard/")[1];
-  const view = fromPath || root.dataset.view || "overview";
-  return VIEW_META[view] ? view : "overview";
-}
-
-function viewPath(prefix, view) {
-  return view === "overview" ? `${prefix}/dashboard` : `${prefix}/dashboard/${view}`;
+function routePath(view) {
+  return view === "overview" ? "/dashboard" : `/dashboard/${view}`;
 }
 
 function Badge({ active, children }) {
@@ -35,25 +30,20 @@ function PageHead({ meta, action }) {
   );
 }
 
-function Shell({ prefix, view, navigate, children }) {
-  function go(nextView, event) {
-    event.preventDefault();
-    navigate(nextView);
-  }
-
+function Shell({ children }) {
   return (
     <main className="console-shell">
       <aside className="console-sidebar">
         <div className="sidebar-title">控制台</div>
         {Object.entries(VIEW_META).map(([key, item]) => (
-          <a
+          <NavLink
             key={key}
-            className={`side-link ${view === key ? "active" : ""}`}
-            href={viewPath(prefix, key)}
-            onClick={(event) => go(key, event)}
+            className={({ isActive }) => `side-link ${isActive ? "active" : ""}`}
+            end={key === "overview"}
+            to={routePath(key)}
           >
             {item.label}
-          </a>
+          </NavLink>
         ))}
       </aside>
       <section className="console-content">{children}</section>
@@ -61,7 +51,7 @@ function Shell({ prefix, view, navigate, children }) {
   );
 }
 
-function Overview({ data, onServiceAction, navigate, prefix }) {
+function Overview({ data, onServiceAction, prefix }) {
   const summary = data.Summary || {};
   return (
     <>
@@ -103,9 +93,9 @@ function Overview({ data, onServiceAction, navigate, prefix }) {
           <h3>工作区</h3>
         </div>
         <div className="quick-grid">
-          <QuickLink title="客户管理" desc="创建客户、停用订阅、清零流量" onClick={() => navigate("clients")} />
-          <QuickLink title="实时监控" desc="查看被控端 CPU、内存、硬盘状态" onClick={() => navigate("monitoring")} />
-          <QuickLink title="系统安全" desc="版本升级、BBR、fail2ban、SSH 端口" onClick={() => navigate("system")} />
+          <QuickLink title="客户管理" desc="创建客户、停用订阅、清零流量" to="/dashboard/clients" />
+          <QuickLink title="实时监控" desc="查看被控端 CPU、内存、硬盘状态" to="/dashboard/monitoring" />
+          <QuickLink title="系统安全" desc="版本升级、BBR、fail2ban、SSH 端口" to="/dashboard/system" />
         </div>
       </section>
 
@@ -137,12 +127,12 @@ function Metric({ label, value, alert }) {
   );
 }
 
-function QuickLink({ title, desc, onClick }) {
+function QuickLink({ title, desc, to }) {
   return (
-    <button className="quick-link quick-button" onClick={onClick}>
+    <Link className="quick-link" to={to}>
       <strong>{title}</strong>
       <span className="muted">{desc}</span>
-    </button>
+    </Link>
   );
 }
 
@@ -417,9 +407,28 @@ function Logs({ prefix }) {
   );
 }
 
+function DashboardRoutes({ data, error, loadDashboard, prefix, serviceAction }) {
+  let content;
+  if (error) content = <section className="card"><p className="alert">加载失败：{error}</p></section>;
+  else if (!data) content = <section className="card"><p className="muted">正在加载控制台数据。</p></section>;
+  else {
+    content = (
+      <Routes>
+        <Route index element={<Overview data={data} onServiceAction={serviceAction} prefix={prefix} />} />
+        <Route path="clients" element={<Clients data={data} refresh={loadDashboard} prefix={prefix} />} />
+        <Route path="monitoring" element={<Monitoring prefix={prefix} />} />
+        <Route path="system" element={<System data={data} refresh={loadDashboard} prefix={prefix} />} />
+        <Route path="logs" element={<Logs prefix={prefix} />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    );
+  }
+
+  return <Shell>{content}</Shell>;
+}
+
 function App({ root }) {
   const prefix = root.dataset.prefix || "";
-  const [view, setView] = useState(initialView(root));
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
 
@@ -448,32 +457,29 @@ function App({ root }) {
     setData((current) => ({ ...current, Active: payload.active }));
   }
 
-  function navigate(nextView) {
-    window.history.pushState({ view: nextView }, "", viewPath(prefix, nextView));
-    setView(nextView);
-  }
-
   useEffect(() => {
     loadDashboard();
   }, []);
 
-  useEffect(() => {
-    const handler = () => setView(initialView(root));
-    window.addEventListener("popstate", handler);
-    return () => window.removeEventListener("popstate", handler);
-  }, []);
-
-  const content = useMemo(() => {
-    if (error) return <section className="card"><p className="alert">加载失败：{error}</p></section>;
-    if (!data) return <section className="card"><p className="muted">正在加载控制台数据。</p></section>;
-    if (view === "clients") return <Clients data={data} refresh={loadDashboard} prefix={prefix} />;
-    if (view === "monitoring") return <Monitoring prefix={prefix} />;
-    if (view === "system") return <System data={data} refresh={loadDashboard} prefix={prefix} />;
-    if (view === "logs") return <Logs prefix={prefix} />;
-    return <Overview data={data} onServiceAction={serviceAction} navigate={navigate} prefix={prefix} />;
-  }, [data, error, view]);
-
-  return <Shell prefix={prefix} view={view} navigate={navigate}>{content}</Shell>;
+  return (
+    <BrowserRouter basename={prefix}>
+      <Routes>
+        <Route
+          path="/dashboard/*"
+          element={
+            <DashboardRoutes
+              data={data}
+              error={error}
+              loadDashboard={loadDashboard}
+              prefix={prefix}
+              serviceAction={serviceAction}
+            />
+          }
+        />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
 const root = document.getElementById("dashboard-root");
