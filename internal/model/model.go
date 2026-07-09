@@ -136,10 +136,9 @@ type Client struct {
 	QuotaBytes int64  `json:"quota_bytes"` // 0 = unlimited
 	CreatedAt  int64  `json:"created_at"`  // unix seconds
 
-	// DeviceLimit is the intended max concurrent devices (0 = unlimited). It is
-	// stored and displayed but NOT enforced: sing-box exposes no per-user
-	// connection/IP information (clash_api connections lack the user, v2ray_api
-	// reports only traffic), so device counting is not currently possible.
+	// DeviceLimit is the intended max concurrent devices (0 = unlimited). Our
+	// custom sing-box build enforces it by counting distinct source IPs per
+	// authenticated user during inbound connection handling.
 	DeviceLimit int `json:"device_limit"`
 
 	// ExpiresAt is when the client expires (unix seconds, 0 = never). Expired

@@ -54,10 +54,11 @@ type Inbound struct {
 
 // User is an inbound user entry; unused fields are omitted.
 type User struct {
-	Name     string `json:"name,omitempty"`
-	UUID     string `json:"uuid,omitempty"`
-	Password string `json:"password,omitempty"`
-	Flow     string `json:"flow,omitempty"`
+	Name        string `json:"name,omitempty"`
+	UUID        string `json:"uuid,omitempty"`
+	Password    string `json:"password,omitempty"`
+	Flow        string `json:"flow,omitempty"`
+	DeviceLimit int    `json:"device_limit,omitempty"`
 }
 
 // Handshake is the upstream a Reality/ShadowTLS listener forwards probes to.

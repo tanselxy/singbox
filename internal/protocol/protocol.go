@@ -94,7 +94,7 @@ func ClientLinks(srv model.Server, c model.Client, label string) []model.Link {
 func shadowTLSInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
 	users := make([]sbschema.User, 0, len(clients))
 	for _, c := range clients {
-		users = append(users, sbschema.User{Name: c.Name, Password: c.ShadowTLSPassword})
+		users = append(users, sbschema.User{Name: c.Name, Password: c.ShadowTLSPassword, DeviceLimit: c.DeviceLimit})
 	}
 	return sbschema.Inbound{
 		Type:       "shadowtls",
@@ -112,7 +112,7 @@ func shadowTLSInbound(srv model.Server, clients []model.Client) sbschema.Inbound
 func ssBehindShadowTLSInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
 	users := make([]sbschema.User, 0, len(clients))
 	for _, c := range clients {
-		users = append(users, sbschema.User{Name: c.Name, Password: c.SS2022Key})
+		users = append(users, sbschema.User{Name: c.Name, Password: c.SS2022Key, DeviceLimit: c.DeviceLimit})
 	}
 	return sbschema.Inbound{
 		Type:       "shadowsocks",
@@ -129,7 +129,7 @@ func ssBehindShadowTLSInbound(srv model.Server, clients []model.Client) sbschema
 func tuicInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
 	users := make([]sbschema.User, 0, len(clients))
 	for _, c := range clients {
-		users = append(users, sbschema.User{Name: c.Name, UUID: c.UUID})
+		users = append(users, sbschema.User{Name: c.Name, UUID: c.UUID, DeviceLimit: c.DeviceLimit})
 	}
 	return sbschema.Inbound{
 		Type:              "tuic",
@@ -151,7 +151,7 @@ func tuicInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
 func realityInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
 	users := make([]sbschema.User, 0, len(clients))
 	for _, c := range clients {
-		users = append(users, sbschema.User{Name: c.Name, UUID: c.UUID, Flow: "xtls-rprx-vision"})
+		users = append(users, sbschema.User{Name: c.Name, UUID: c.UUID, Flow: "xtls-rprx-vision", DeviceLimit: c.DeviceLimit})
 	}
 	return sbschema.Inbound{
 		Type:       "vless",
@@ -175,7 +175,7 @@ func realityInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
 func vlessCDNInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
 	users := make([]sbschema.User, 0, len(clients))
 	for _, c := range clients {
-		users = append(users, sbschema.User{Name: c.Name, UUID: c.UUID})
+		users = append(users, sbschema.User{Name: c.Name, UUID: c.UUID, DeviceLimit: c.DeviceLimit})
 	}
 	return sbschema.Inbound{
 		Type:       "vless",
@@ -196,7 +196,7 @@ func vlessCDNInbound(srv model.Server, clients []model.Client) sbschema.Inbound 
 func trojanInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
 	users := make([]sbschema.User, 0, len(clients))
 	for _, c := range clients {
-		users = append(users, sbschema.User{Name: c.Name, Password: c.Password})
+		users = append(users, sbschema.User{Name: c.Name, Password: c.Password, DeviceLimit: c.DeviceLimit})
 	}
 	return sbschema.Inbound{
 		Type:       "trojan",
@@ -217,7 +217,7 @@ func trojanInbound(srv model.Server, clients []model.Client) sbschema.Inbound {
 func hysteria2Inbound(srv model.Server, clients []model.Client) sbschema.Inbound {
 	users := make([]sbschema.User, 0, len(clients))
 	for _, c := range clients {
-		users = append(users, sbschema.User{Name: c.Name, Password: c.Password})
+		users = append(users, sbschema.User{Name: c.Name, Password: c.Password, DeviceLimit: c.DeviceLimit})
 	}
 	return sbschema.Inbound{
 		Type:       "hysteria2",

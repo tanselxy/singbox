@@ -76,6 +76,20 @@ func TestEveryInboundHasAllClientsAsUsers(t *testing.T) {
 	}
 }
 
+func TestEveryInboundCarriesDeviceLimit(t *testing.T) {
+	srv := sampleServer()
+	cs := clients()
+	cs[0].DeviceLimit = 2
+	for _, in := range Inbounds(srv, cs) {
+		if len(in.Users) == 0 {
+			t.Fatalf("inbound %s has no users", in.Tag)
+		}
+		if in.Users[0].DeviceLimit != 2 {
+			t.Errorf("inbound %s device_limit = %d, want 2", in.Tag, in.Users[0].DeviceLimit)
+		}
+	}
+}
+
 func TestClientLinksCarryOwnCredentials(t *testing.T) {
 	srv := sampleServer()
 	cs := clients()

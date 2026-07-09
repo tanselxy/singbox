@@ -9,10 +9,12 @@ on:
 permissions:
   contents: write
 
-# Pinned upstream sing-box version we build (with the with_v2ray_api tag, which
-# the official binaries omit). Bump this to track upstream.
+# Pinned sing-box fork revision we build (with the with_v2ray_api tag, which
+# the official binaries omit). Bump this after updating the fork.
 env:
   SINGBOX_VERSION: "1.13.14"
+  SINGBOX_SOURCE_REPO: "https://github.com/tanselxy/sing-box.git"
+  SINGBOX_SOURCE_REF: "add2bd3cb29003dd48d92de2d3776f914b26153f"
   SINGBOX_TAGS: "with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_v2ray_api"
 
 jobs:
@@ -38,13 +40,13 @@ jobs:
           done
 
       - name: Build sing-box with v2ray_api
-        # We redistribute a build of upstream sing-box (GPL-3.0). It is built
-        # unmodified from the tag below; corresponding source is at
-        # https://github.com/SagerNet/sing-box/tree/v${SINGBOX_VERSION}
+        # We redistribute a custom fork build of sing-box (GPL-3.0), based on
+        # upstream v${SINGBOX_VERSION} plus per-user device_limit enforcement.
         run: |
-          git clone --depth 1 --branch "v${SINGBOX_VERSION}" \
-            https://github.com/SagerNet/sing-box.git /tmp/sing-box
+          git clone --depth 1 "${SINGBOX_SOURCE_REPO}" /tmp/sing-box
           cd /tmp/sing-box
+          git fetch --depth 1 origin "${SINGBOX_SOURCE_REF}"
+          git checkout --detach FETCH_HEAD
           for arch in amd64 arm64; do
             CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" \
               go build -trimpath -tags "${SINGBOX_TAGS}" \
@@ -69,3 +71,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
+          body: |
+            面板 `singbox-panel`：MIT 许可证。
+
+            内置 `sing-box_linux_*` 二进制来自 [tanselxy/sing-box](https://github.com/tanselxy/sing-box)
+            **${{ env.SINGBOX_SOURCE_REF }}**，基于上游 [SagerNet/sing-box](https://github.com/SagerNet/sing-box)
+            **v${{ env.SINGBOX_VERSION }}**，遵循 **GPL-3.0**，额外启用 `with_v2ray_api`
+            编译标签，并加入按认证用户限制来源设备数的 `device_limit` 补丁。

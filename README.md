@@ -187,7 +187,19 @@ bash <(curl -sL singbox.soups.eu.org/get)
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证，详情请查看 [LICENSE](LICENSE) 文件。
+本项目（面板 singbox-panel）采用 MIT 许可证，详情请查看 [LICENSE](LICENSE) 文件。
+
+### 关于内置的 sing-box 二进制（GPL-3.0）
+
+本项目分发的 `sing-box` 可执行文件来自 [tanselxy/sing-box](https://github.com/tanselxy/sing-box)，
+基于上游 [SagerNet/sing-box](https://github.com/SagerNet/sing-box) 对应版本，遵循 **GPL-3.0** 许可证。
+该二进制在编译时额外启用了 `with_v2ray_api` 构建标签（官方默认不启用，用于按用户统计流量），
+并加入按认证用户限制来源设备数的 `device_limit` 补丁。
+
+- 对应源码：本仓库 CI（[.github/workflows/release.yml](.github/workflows/release.yml)）中的
+  `SINGBOX_SOURCE_REPO` 和 `SINGBOX_SOURCE_REF` 即为所用 fork 与 commit。
+- 构建方式：`git clone` 该 fork commit 后 `go build -tags "...,with_v2ray_api" ./cmd/sing-box`。
+- sing-box 采用 GPL-3.0，与本项目 MIT 代码为“聚合分发”关系；sing-box 部分的完整权利与义务以其上游 GPL-3.0 许可证为准。
 
 ## 🆘 获取帮助
 
