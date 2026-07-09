@@ -63,33 +63,53 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("install 需要 root 权限")
 	}
 
-	srv, err := buildServer(ctx, opts)
-	if err != nil {
+	// Re-running install on a box that is already deployed is an in-place
+	// upgrade: reuse the existing server settings (so existing client links keep
+	// working) instead of regenerating keys/ports.
+	existing := !opts.DryRun && state.Exists()
+
+	var srv model.Server
+	var err error
+	if existing {
+		if srv, err = state.LoadServer(); err != nil {
+			return nil, fmt.Errorf("读取已有部署: %w", err)
+		}
+	} else if srv, err = buildServer(ctx, opts); err != nil {
 		return nil, err
 	}
 
-	client, err := secret.NewClient()
-	if err != nil {
-		return nil, err
-	}
-	client.Name = defaultClientName
-	client.Enabled = true
-	client.CreatedAt = time.Now().Unix()
-	client.ID = 1 // presentational for dry-run; the store assigns the real id
-
-	res := &Result{Server: srv, Client: client, Links: protocol.ClientLinks(srv, client)}
+	res := &Result{Server: srv}
 
 	if opts.DryRun {
+		client, err := newDefaultClient()
+		if err != nil {
+			return nil, err
+		}
+		res.Client, res.Links = client, protocol.ClientLinks(srv, client)
 		res.ConfigPath, err = writeDryRun(opts.OutputDir, srv, []model.Client{client})
 		return res, err
 	}
 
-	if err := doInstall(ctx, srv, &client, res); err != nil {
+	client, err := doInstall(ctx, srv, res)
+	if err != nil {
 		return nil, err
 	}
 	res.Client = client
+	res.Links = protocol.ClientLinks(srv, client)
 	res.ConfigPath = singbox.ConfigPath
 	return res, nil
+}
+
+// newDefaultClient builds the initial client seeded on a fresh install.
+func newDefaultClient() (model.Client, error) {
+	c, err := secret.NewClient()
+	if err != nil {
+		return model.Client{}, err
+	}
+	c.Name = defaultClientName
+	c.Enabled = true
+	c.CreatedAt = time.Now().Unix()
+	return c, nil
 }
 
 // buildServer gathers the server-level settings.
@@ -139,50 +159,69 @@ func chooseServerIP(a network.Addresses) (ip string, ipv6Only bool) {
 	return "", false
 }
 
-// doInstall applies the deployment to the live system.
-func doInstall(ctx context.Context, srv model.Server, client *model.Client, res *Result) error {
+// doInstall applies the deployment to the live system and returns the client to
+// display (the seeded default on a fresh install, or an existing one). It is
+// idempotent: re-running preserves existing certs, clients and server settings.
+func doInstall(ctx context.Context, srv model.Server, res *Result) (model.Client, error) {
 	osInfo := detectOS(ctx)
 	if err := singbox.EnsureInstalled(ctx, osInfo); err != nil {
-		return fmt.Errorf("安装 sing-box: %w", err)
+		return model.Client{}, fmt.Errorf("安装 sing-box: %w", err)
 	}
 
-	ss, err := cert.GenerateSelfSigned(cert.DefaultCN, certValidity)
-	if err != nil {
-		return err
-	}
-	if err := ss.WriteFiles(srv.CertFile, srv.KeyFile); err != nil {
-		return err
+	// Generate the self-signed cert only if it does not already exist.
+	if !fileExists(srv.CertFile) || !fileExists(srv.KeyFile) {
+		ss, err := cert.GenerateSelfSigned(cert.DefaultCN, certValidity)
+		if err != nil {
+			return model.Client{}, err
+		}
+		if err := ss.WriteFiles(srv.CertFile, srv.KeyFile); err != nil {
+			return model.Client{}, err
+		}
 	}
 
-	// Persist server settings and the first client.
 	if err := state.SaveServer(srv); err != nil {
-		return err
+		return model.Client{}, err
 	}
 	db, err := store.Open(state.DBPath)
 	if err != nil {
-		return err
+		return model.Client{}, err
 	}
 	defer db.Close()
 
-	created, err := db.CreateClient(*client)
+	// Seed the default client only when the store has none yet.
+	existingClients, err := db.ListClients()
 	if err != nil {
-		return fmt.Errorf("创建初始客户: %w", err)
+		return model.Client{}, err
 	}
-	*client = created
+	var initial model.Client
+	if len(existingClients) == 0 {
+		c, err := newDefaultClient()
+		if err != nil {
+			return model.Client{}, err
+		}
+		if initial, err = db.CreateClient(c); err != nil {
+			return model.Client{}, fmt.Errorf("创建初始客户: %w", err)
+		}
+	} else {
+		initial = existingClients[0]
+	}
 
 	clients, err := db.ActiveClients(time.Now().Unix())
 	if err != nil {
-		return err
+		return model.Client{}, err
 	}
 
 	if err := singbox.WriteUnit(ctx); err != nil {
-		return err
+		return model.Client{}, err
 	}
 	if err := deploy.Apply(ctx, srv, clients); err != nil {
-		return err
+		return model.Client{}, err
 	}
 
-	return setupPanel(ctx, srv, res)
+	if err := setupPanel(ctx, srv, res); err != nil {
+		return model.Client{}, err
+	}
+	return initial, nil
 }
 
 // setupPanel bootstraps the panel config, installs its systemd unit so it is
@@ -207,6 +246,11 @@ func setupPanel(ctx context.Context, srv model.Server, res *Result) error {
 	res.PanelURL = fmt.Sprintf("https://%s:%d/%s/", host, cfg.Port, cfg.PathPrefix)
 	res.PanelPassword = freshPassword
 	return nil
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
 }
 
 func detectOS(ctx context.Context) system.OSInfo {
