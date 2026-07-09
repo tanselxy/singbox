@@ -133,6 +133,59 @@
     });
   });
 
+  // Add-node form (master side).
+  const addNodeBtn = document.getElementById("add-node");
+  const nodeForm = document.getElementById("node-form");
+  if (addNodeBtn && nodeForm) {
+    addNodeBtn.addEventListener("click", () => (nodeForm.hidden = !nodeForm.hidden));
+    document.getElementById("cancel-node").addEventListener("click", () => (nodeForm.hidden = true));
+    document.getElementById("create-node").addEventListener("click", async (e) => {
+      const name = document.getElementById("node-name").value.trim();
+      const address = document.getElementById("node-address").value.trim();
+      const token = document.getElementById("node-token").value.trim();
+      if (!name || !address || !token) {
+        alert("请填写名称、地址和令牌");
+        return;
+      }
+      e.target.disabled = true;
+      try {
+        const body = new URLSearchParams({ name, address, token });
+        const res = await fetch(prefix + "/api/nodes", { method: "POST", body });
+        const data = await res.json();
+        if (data.ok) {
+          if (data.warn) alert(data.warn);
+          location.reload();
+        } else {
+          alert("添加失败: " + (data.error || ""));
+          e.target.disabled = false;
+        }
+      } catch (err) {
+        alert("请求失败: " + err.message);
+        e.target.disabled = false;
+      }
+    });
+  }
+
+  // Delete node.
+  document.querySelectorAll("[data-node-action]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("确认删除该节点？订阅将不再包含它。")) return;
+      btn.disabled = true;
+      try {
+        const res = await fetch(prefix + "/api/nodes/" + btn.dataset.id + "/delete", { method: "POST" });
+        const data = await res.json();
+        if (data.ok) location.reload();
+        else {
+          alert("删除失败: " + (data.error || ""));
+          btn.disabled = false;
+        }
+      } catch (e) {
+        alert("请求失败: " + e.message);
+        btn.disabled = false;
+      }
+    });
+  });
+
   // Load recent service logs.
   const loadBtn = document.getElementById("load-logs");
   if (loadBtn) {

@@ -222,6 +222,10 @@ func (s *Server) handleClientDetail(w http.ResponseWriter, r *http.Request) {
 // ---- client CRUD ----
 
 func (s *Server) handleClientCreate(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Managed {
+		writeJSON(w, map[string]any{"ok": false, "error": "本机为受控节点，请在主控面板管理客户"})
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": "bad form"})
 		return
@@ -256,6 +260,10 @@ func (s *Server) handleClientCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleClientAction(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Managed {
+		writeJSON(w, map[string]any{"ok": false, "error": "本机为受控节点，请在主控面板管理客户"})
+		return
+	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": "bad id"})
@@ -302,8 +310,15 @@ func (s *Server) handleSubscription(w http.ResponseWriter, r *http.Request) {
 	srv, _ := state.LoadServer()
 
 	var lines []string
+	// This master's own node.
 	for _, l := range protocol.ClientLinks(srv, c) {
 		lines = append(lines, l.URL)
+	}
+	// Plus every registered remote node.
+	for _, ns := range s.nodeServers() {
+		for _, l := range protocol.ClientLinks(ns, c) {
+			lines = append(lines, l.URL)
+		}
 	}
 	body := strings.Join(lines, "\n")
 
@@ -387,7 +402,12 @@ func (s *Server) applyConfig(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return deploy.Apply(ctx, srv, clients)
+	if err := deploy.Apply(ctx, srv, clients); err != nil {
+		return err
+	}
+	// Fan the same client set out to all registered nodes (best-effort).
+	s.pushToNodes(ctx)
+	return nil
 }
 
 // ---- helpers ----

@@ -61,7 +61,7 @@ func (p *Poller) pollOnce(ctx context.Context) error {
 	// Update per-user traffic from v2ray_api (best-effort: if sing-box is
 	// restarting or the API is briefly unavailable, we still run enforcement
 	// below so expiry is applied even without traffic).
-	if deltas, err := query(ctx); err == nil {
+	if deltas, err := QueryDeltas(ctx); err == nil {
 		byName := make(map[string]int64, len(clients))
 		for _, c := range clients {
 			byName[c.Name] = c.ID
@@ -103,10 +103,18 @@ func (p *Poller) usage(clientID int64) int64 {
 	return tr.Up + tr.Down
 }
 
-type delta struct{ up, down int64 }
+// Delta is a per-user up/down traffic delta since the last query.
+type Delta struct{ up, down int64 }
 
-// query fetches and resets all user counters, returning per-user deltas.
-func query(ctx context.Context) (map[string]delta, error) {
+// Up returns the upload delta in bytes.
+func (d Delta) Up() int64 { return d.up }
+
+// Down returns the download delta in bytes.
+func (d Delta) Down() int64 { return d.down }
+
+// QueryDeltas fetches and resets all per-user counters from sing-box's v2ray_api,
+// returning per-user deltas since the previous call.
+func QueryDeltas(ctx context.Context) (map[string]Delta, error) {
 	dialCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
@@ -131,7 +139,7 @@ func query(ctx context.Context) (map[string]delta, error) {
 		return nil, err
 	}
 
-	out := map[string]delta{}
+	out := map[string]Delta{}
 	for _, s := range resp.GetStat() {
 		name, dir, ok := parseUserStat(s.GetName())
 		if !ok {

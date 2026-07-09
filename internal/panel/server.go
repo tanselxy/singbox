@@ -29,8 +29,12 @@ type Server struct {
 	db *store.Store
 
 	// applyMu serializes config regeneration + sing-box restart so concurrent
-	// client edits cannot interleave.
+	// client edits cannot interleave. It also guards pollerCancel and cfg.Managed.
 	applyMu sync.Mutex
+
+	// pollerCancel stops the local traffic poller; set when a node becomes
+	// managed by a master (see handleAgentApply).
+	pollerCancel context.CancelFunc
 }
 
 // New builds a panel server from its bootstrap config, opening the client store.
@@ -75,8 +79,20 @@ func (s *Server) Handler() http.Handler {
 	// System optimization / security.
 	mux.HandleFunc("POST "+p+"/api/system/{action}", s.protected(s.handleSystemAction))
 
+	// Node management (master side).
+	mux.HandleFunc("GET "+p+"/nodes", s.protected(s.handleNodesPage))
+	mux.HandleFunc("POST "+p+"/api/nodes", s.protected(s.handleNodeCreate))
+	mux.HandleFunc("POST "+p+"/api/nodes/{id}/delete", s.protected(s.handleNodeDelete))
+
 	// Subscription endpoint: token-authenticated (no login), for client apps.
 	mux.HandleFunc("GET "+p+"/sub/{token}", s.handleSubscription)
+
+	// Agent API (node side): bearer-token auth, stable path (not under the random
+	// prefix) so a master can reach it.
+	mux.HandleFunc("GET /agent/server", s.agentAuth(s.handleAgentServer))
+	mux.HandleFunc("POST /agent/apply", s.agentAuth(s.handleAgentApply))
+	mux.HandleFunc("GET /agent/traffic", s.agentAuth(s.handleAgentTraffic))
+	mux.HandleFunc("GET /agent/metrics", s.agentAuth(s.handleAgentMetrics))
 
 	// Embedded static assets, served under <prefix>/static/.
 	mux.Handle("GET "+p+"/static/", http.StripPrefix(p+"/", http.FileServer(http.FS(web.FS))))
@@ -93,15 +109,25 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		TLSConfig:         &tls.Config{MinVersion: tls.VersionTLS12},
 	}
 
-	// Start the per-user traffic poller. On reaching quota, disable the client
-	// and regenerate the config.
-	poller := traffic.NewPoller(s.db, trafficInterval, func(ctx context.Context, clientID int64) error {
+	// Start the local per-user traffic poller unless this panel is managed by a
+	// master (then the master reads the counters; a local poller would compete).
+	// enforce disables a client on quota/expiry and regenerates config.
+	enforce := func(ctx context.Context, clientID int64) error {
 		if err := s.db.SetEnabled(clientID, false); err != nil {
 			return err
 		}
 		return s.applyConfig(ctx)
-	})
-	go poller.Run(ctx)
+	}
+	if !s.cfg.Managed {
+		pollerCtx, cancel := context.WithCancel(ctx)
+		s.applyMu.Lock()
+		s.pollerCancel = cancel
+		s.applyMu.Unlock()
+		go traffic.NewPoller(s.db, trafficInterval, enforce).Run(pollerCtx)
+	}
+
+	// Master side: poll registered remote nodes for traffic + accumulate.
+	go s.runNodePoller(ctx, enforce)
 
 	errCh := make(chan error, 1)
 	go func() {

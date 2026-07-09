@@ -156,3 +156,19 @@ func (c Client) Active(now int64) bool {
 	}
 	return c.ExpiresAt == 0 || now < c.ExpiresAt
 }
+
+// Node is a remote sing-box panel controlled by this master. The master pushes
+// the global client set to each node's agent API and aggregates its nodes'
+// links (for subscriptions), traffic and system metrics.
+type Node struct {
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	Address string `json:"address"` // agent base URL, e.g. https://1.2.3.4:PORT (no trailing slash)
+	Token   string `json:"token"`   // agent bearer token
+
+	// ServerJSON caches the node's model.Server (fetched from the node) so the
+	// master can generate that node's links for subscriptions without a live
+	// call. Refreshed when the node is (re)registered.
+	ServerJSON string `json:"server_json"`
+	CreatedAt  int64  `json:"created_at"`
+}

@@ -60,6 +60,14 @@ CREATE TABLE IF NOT EXISTS traffic (
     up_bytes   INTEGER NOT NULL DEFAULT 0,
     down_bytes INTEGER NOT NULL DEFAULT 0,
     updated_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS nodes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL UNIQUE,
+    address     TEXT NOT NULL,
+    token       TEXT NOT NULL,
+    server_json TEXT NOT NULL DEFAULT '',
+    created_at  INTEGER NOT NULL
 );`
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("migrate: %w", err)
@@ -172,6 +180,64 @@ func (s *Store) DeleteClient(id int64) error {
 		return err
 	}
 	_, err := s.db.Exec(`DELETE FROM clients WHERE id = ?`, id)
+	return err
+}
+
+// ---- nodes ----
+
+// CreateNode inserts a remote node.
+func (s *Store) CreateNode(n model.Node) (model.Node, error) {
+	res, err := s.db.Exec(
+		`INSERT INTO nodes (name, address, token, server_json, created_at) VALUES (?, ?, ?, ?, ?)`,
+		n.Name, n.Address, n.Token, n.ServerJSON, n.CreatedAt,
+	)
+	if err != nil {
+		return model.Node{}, fmt.Errorf("create node: %w", err)
+	}
+	n.ID, _ = res.LastInsertId()
+	return n, nil
+}
+
+const nodeColumns = `id, name, address, token, server_json, created_at`
+
+// ListNodes returns all nodes ordered by id.
+func (s *Store) ListNodes() ([]model.Node, error) {
+	rows, err := s.db.Query(`SELECT ` + nodeColumns + ` FROM nodes ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []model.Node
+	for rows.Next() {
+		var n model.Node
+		if err := rows.Scan(&n.ID, &n.Name, &n.Address, &n.Token, &n.ServerJSON, &n.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+// GetNode returns a node by id.
+func (s *Store) GetNode(id int64) (model.Node, error) {
+	row := s.db.QueryRow(`SELECT `+nodeColumns+` FROM nodes WHERE id = ?`, id)
+	var n model.Node
+	err := row.Scan(&n.ID, &n.Name, &n.Address, &n.Token, &n.ServerJSON, &n.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return model.Node{}, ErrNotFound
+	}
+	return n, err
+}
+
+// UpdateNodeServer refreshes a node's cached server JSON.
+func (s *Store) UpdateNodeServer(id int64, serverJSON string) error {
+	_, err := s.db.Exec(`UPDATE nodes SET server_json = ? WHERE id = ?`, serverJSON, id)
+	return err
+}
+
+// DeleteNode removes a node.
+func (s *Store) DeleteNode(id int64) error {
+	_, err := s.db.Exec(`DELETE FROM nodes WHERE id = ?`, id)
 	return err
 }
 

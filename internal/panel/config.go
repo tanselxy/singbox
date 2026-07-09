@@ -35,6 +35,14 @@ type Config struct {
 	SessionKey   string `json:"session_key"` // hex, HMAC key for signed cookies
 	CertFile     string `json:"cert_file"`
 	KeyFile      string `json:"key_file"`
+
+	// AgentToken authenticates a master controlling this panel as a node.
+	AgentToken string `json:"agent_token"`
+
+	// Managed is set once a master pushes config to this panel via the agent
+	// API. A managed panel defers all client state to its master: local client
+	// management is disabled and its local traffic poller does not run.
+	Managed bool `json:"managed"`
 }
 
 // EnsureConfig loads the panel config, generating and persisting a fresh one
@@ -46,6 +54,15 @@ func EnsureConfig() (Config, string, error) {
 		var c Config
 		if err := json.Unmarshal(b, &c); err != nil {
 			return Config{}, "", fmt.Errorf("parse panel config: %w", err)
+		}
+		// Backfill an agent token for configs created before multi-node support.
+		if c.AgentToken == "" {
+			if c.AgentToken, err = randHex(24); err != nil {
+				return Config{}, "", err
+			}
+			if err := c.save(); err != nil {
+				return Config{}, "", err
+			}
 		}
 		return c, "", nil
 	}
@@ -81,6 +98,10 @@ func generateConfig() (Config, string, error) {
 	if err != nil {
 		return Config{}, "", err
 	}
+	agentToken, err := randHex(24)
+	if err != nil {
+		return Config{}, "", err
+	}
 
 	ss, err := cert.GenerateSelfSigned("localhost", 100*365*24*time.Hour)
 	if err != nil {
@@ -97,7 +118,14 @@ func generateConfig() (Config, string, error) {
 		SessionKey:   sessionKey,
 		CertFile:     panelCertFile,
 		KeyFile:      panelKeyFile,
+		AgentToken:   agentToken,
 	}, password, nil
+}
+
+// SetManaged persists the managed flag.
+func (c *Config) SetManaged(managed bool) error {
+	c.Managed = managed
+	return c.save()
 }
 
 func (c Config) save() error {
