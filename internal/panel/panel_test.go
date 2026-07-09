@@ -165,6 +165,12 @@ func TestSubscriptionByToken(t *testing.T) {
 	if !strings.Contains(string(decoded), "vless://") {
 		t.Error("decoded subscription should contain node links")
 	}
+	if got := resp.Header.Get("Subscription-Userinfo"); !strings.Contains(got, "upload=") || !strings.Contains(got, "download=") || !strings.Contains(got, "total=") {
+		t.Fatalf("subscription should include traffic header, got %q", got)
+	}
+	if got := resp.Header.Get("Profile-Title"); got == "" {
+		t.Fatal("subscription should include profile title")
+	}
 
 	// Unknown token → 404.
 	resp2, _ := http.Get(ts.URL + "/abc/sub/nope")

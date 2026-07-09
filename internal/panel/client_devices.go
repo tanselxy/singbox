@@ -37,8 +37,10 @@ type clashConnectionMetadata struct {
 type clientDeviceRow struct {
 	SourceIP      string   `json:"source_ip"`
 	Connections   int      `json:"connections"`
+	Current       string   `json:"current"`
 	Upload        string   `json:"upload"`
 	Download      string   `json:"download"`
+	CurrentBytes  int64    `json:"current_bytes"`
 	UploadBytes   int64    `json:"upload_bytes"`
 	DownloadBytes int64    `json:"download_bytes"`
 	FirstSeen     string   `json:"first_seen"`
@@ -57,9 +59,17 @@ func (s *Server) handleClientDevices(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
+	tr, _ := s.db.GetTraffic(c.ID)
+	used := tr.Up + tr.Down
 	writeJSON(w, map[string]any{
-		"ok":      true,
-		"devices": groupClientDevices(connections, c.Name),
+		"ok": true,
+		"client": map[string]any{
+			"used":        humanBytes(used),
+			"quota":       quotaLabel(c.QuotaBytes),
+			"used_bytes":  used,
+			"quota_bytes": c.QuotaBytes,
+		},
+		"devices": groupClientDevices(connections, c.Name, c.QuotaBytes),
 	})
 }
 
@@ -143,7 +153,7 @@ func closeClashConnection(r *http.Request, id string) error {
 	return nil
 }
 
-func groupClientDevices(connections []clashConnection, user string) []clientDeviceRow {
+func groupClientDevices(connections []clashConnection, user string, quotaBytes int64) []clientDeviceRow {
 	type aggregate struct {
 		row      clientDeviceRow
 		first    time.Time
@@ -178,6 +188,12 @@ func groupClientDevices(connections []clashConnection, user string) []clientDevi
 	}
 	devices := make([]clientDeviceRow, 0, len(groups))
 	for _, group := range groups {
+		group.row.CurrentBytes = group.row.UploadBytes + group.row.DownloadBytes
+		if quotaBytes > 0 {
+			group.row.Current = humanBytes(group.row.CurrentBytes) + " / " + humanBytes(quotaBytes)
+		} else {
+			group.row.Current = humanBytes(group.row.CurrentBytes) + " / 不限"
+		}
 		group.row.Upload = humanBytes(group.row.UploadBytes)
 		group.row.Download = humanBytes(group.row.DownloadBytes)
 		group.row.FirstSeen = formatDeviceTime(group.first)

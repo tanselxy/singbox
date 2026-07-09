@@ -17,6 +17,7 @@ export function Clients({ data, refresh, prefix }) {
   const [devicesClient, setDevicesClient] = useState(null);
   const [devicesLoading, setDevicesLoading] = useState(false);
   const [devices, setDevices] = useState([]);
+  const [deviceUsage, setDeviceUsage] = useState(null);
   const [form, setForm] = useState(EMPTY_CLIENT_FORM);
   const clients = data.Clients || [];
 
@@ -83,6 +84,7 @@ export function Clients({ data, refresh, prefix }) {
   async function openDevices(client) {
     setDevicesClient(client);
     setDevices([]);
+    setDeviceUsage(null);
     setDevicesOpen(true);
     setDevicesLoading(true);
     try {
@@ -93,6 +95,7 @@ export function Clients({ data, refresh, prefix }) {
         return;
       }
       setDevices(payload.devices || []);
+      setDeviceUsage(payload.client || null);
     } finally {
       setDevicesLoading(false);
     }
@@ -180,6 +183,7 @@ export function Clients({ data, refresh, prefix }) {
         client={devicesClient}
         loading={devicesLoading}
         devices={devices}
+        usage={deviceUsage}
         onRefresh={() => devicesClient && openDevices(devicesClient)}
         onKick={kickDevice}
         onCancel={() => setDevicesOpen(false)}
@@ -224,7 +228,7 @@ function ClientCreateDialog({ open, form, creating, editing, onChange, onCancel,
   );
 }
 
-function ClientDevicesDialog({ open, client, loading, devices, onRefresh, onKick, onCancel }) {
+function ClientDevicesDialog({ open, client, loading, devices, usage, onRefresh, onKick, onCancel }) {
   return (
     <ModalFrame
       open={open}
@@ -239,12 +243,27 @@ function ClientDevicesDialog({ open, client, loading, devices, onRefresh, onKick
         </>
       }
     >
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <div className="text-xs text-muted-foreground">客户</div>
+          <div className="mt-1 font-medium">{client?.Name || "-"}</div>
+        </div>
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <div className="text-xs text-muted-foreground">累计用量</div>
+          <div className="mt-1 font-medium">{usage?.used || "-"}</div>
+        </div>
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <div className="text-xs text-muted-foreground">总流量</div>
+          <div className="mt-1 font-medium">{usage?.quota || "-"}</div>
+        </div>
+      </div>
       <div className="max-h-[56vh] overflow-auto rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>来源 IP</TableHead>
               <TableHead>连接</TableHead>
+              <TableHead>当前/总量</TableHead>
               <TableHead>上传</TableHead>
               <TableHead>下载</TableHead>
               <TableHead>协议</TableHead>
@@ -255,18 +274,19 @@ function ClientDevicesDialog({ open, client, loading, devices, onRefresh, onKick
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan="7" className="text-muted-foreground">正在加载设备...</TableCell>
+                <TableCell colSpan="8" className="text-muted-foreground">正在加载设备...</TableCell>
               </TableRow>
             )}
             {!loading && devices.length === 0 && (
               <TableRow>
-                <TableCell colSpan="7" className="text-muted-foreground">当前没有在线设备。</TableCell>
+                <TableCell colSpan="8" className="text-muted-foreground">当前没有在线设备。</TableCell>
               </TableRow>
             )}
             {!loading && devices.map((device) => (
               <TableRow key={device.source_ip}>
                 <TableCell className="font-medium tabular-nums">{device.source_ip}</TableCell>
                 <TableCell>{device.connections}</TableCell>
+                <TableCell className="whitespace-nowrap">{device.current}</TableCell>
                 <TableCell>{device.upload}</TableCell>
                 <TableCell>{device.download}</TableCell>
                 <TableCell className="max-w-36 truncate">{(device.protocols || []).join("、") || "-"}</TableCell>

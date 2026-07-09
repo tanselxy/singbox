@@ -296,7 +296,7 @@ func (s *Server) handleClientDetail(w http.ResponseWriter, r *http.Request) {
 		Nodes:  nodes,
 		// http, not https: proxy apps reject the panel's self-signed cert, and
 		// the plain-HTTP side of the listener serves only this endpoint.
-		SubURL:  fmt.Sprintf("http://%s%s/sub/%s", r.Host, s.prefix, c.SubToken),
+		SubURL:  fmt.Sprintf("http://%s%s/sub/%s#%s", r.Host, s.prefix, c.SubToken, url.QueryEscape(c.Name)),
 		Used:    humanBytes(tr.Up + tr.Down),
 		Quota:   quotaLabel(c.QuotaBytes),
 		Devices: deviceLabel(c.DeviceLimit),
@@ -440,6 +440,7 @@ func (s *Server) handleSubscription(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	body := strings.Join(lines, "\n")
+	s.writeSubscriptionHeaders(w, c)
 
 	if r.URL.Query().Get("target") == "raw" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -449,6 +450,24 @@ func (s *Server) handleSubscription(w http.ResponseWriter, r *http.Request) {
 	// Default: base64 (v2rayN/Shadowrocket style).
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write([]byte(base64.StdEncoding.EncodeToString([]byte(body))))
+}
+
+func (s *Server) writeSubscriptionHeaders(w http.ResponseWriter, c model.Client) {
+	tr, _ := s.db.GetTraffic(c.ID)
+	used := tr.Up + tr.Down
+	parts := []string{
+		fmt.Sprintf("upload=%d", tr.Up),
+		fmt.Sprintf("download=%d", tr.Down),
+		fmt.Sprintf("total=%d", c.QuotaBytes),
+	}
+	if c.ExpiresAt > 0 {
+		parts = append(parts, fmt.Sprintf("expire=%d", c.ExpiresAt))
+	}
+	w.Header().Set("Subscription-Userinfo", strings.Join(parts, "; "))
+	w.Header().Set("Profile-Title", url.QueryEscape(c.Name))
+	w.Header().Set("Profile-Update-Interval", "24")
+	w.Header().Set("X-Subscription-Used", humanBytes(used))
+	w.Header().Set("X-Subscription-Total", quotaLabel(c.QuotaBytes))
 }
 
 // ---- misc ----
