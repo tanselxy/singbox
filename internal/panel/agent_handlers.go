@@ -53,9 +53,16 @@ func (s *Server) handleAgentApply(w http.ResponseWriter, r *http.Request) {
 	s.applyMu.Lock()
 	defer s.applyMu.Unlock()
 
-	// Becoming managed: stop the local traffic poller so it does not compete
-	// with the master for the v2ray_api counters.
 	if !s.cfg.Managed {
+		// A panel with registered nodes is a master; it must never become
+		// managed (that would disable its client management and quota
+		// enforcement). This also guards a master pushing to itself.
+		if nodes, err := s.db.ListNodes(); err == nil && len(nodes) > 0 {
+			http.Error(w, "本机为主控（已注册节点），不能被收编为受控节点", http.StatusConflict)
+			return
+		}
+		// Becoming managed: stop the local traffic poller so it does not
+		// compete with the master for the v2ray_api counters.
 		if err := s.cfg.SetManaged(true); err != nil {
 			http.Error(w, "persist managed flag", http.StatusInternalServerError)
 			return

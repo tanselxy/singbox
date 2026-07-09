@@ -3,8 +3,10 @@ package panel
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"html/template"
+	"log"
 	"net"
 	"net/http"
 	"sync"
@@ -60,6 +62,18 @@ func New(cfg Config) (*Server, error) {
 	db, err := store.Open(state.DBPath)
 	if err != nil {
 		return nil, fmt.Errorf("open client store: %w", err)
+	}
+	// Self-heal: a panel with registered nodes is a master and must not be in
+	// managed mode (an older version could mark itself managed when its own
+	// machine was registered as a node, disabling client management and quota
+	// enforcement).
+	if cfg.Managed {
+		if nodes, err := db.ListNodes(); err == nil && len(nodes) > 0 {
+			if err := cfg.SetManaged(false); err != nil {
+				return nil, fmt.Errorf("clear managed flag: %w", err)
+			}
+			log.Printf("panel: 本机注册有节点（主控身份），已自动解除误设的受控状态")
+		}
 	}
 	return &Server{cfg: cfg, auth: a, tmpl: tmpl, prefix: "/" + cfg.PathPrefix, db: db,
 		notifyLast: map[string]time.Time{}, pushed: map[int64][32]byte{}}, nil
@@ -122,13 +136,19 @@ func (s *Server) Handler() http.Handler {
 	return securityHeaders(mux)
 }
 
-// ListenAndServe starts the HTTPS panel and blocks until ctx is cancelled.
+// ListenAndServe starts the panel and blocks until ctx is cancelled. It serves
+// HTTPS and plain HTTP on the same port (see splitTLS): the panel itself is
+// HTTPS-only, while the subscription endpoint also answers plain HTTP because
+// client apps reject the panel's self-signed certificate.
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	srv := &http.Server{
-		Addr:              fmt.Sprintf(":%d", s.cfg.Port),
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		TLSConfig:         &tls.Config{MinVersion: tls.VersionTLS12},
+	}
+	plainSrv := &http.Server{
+		Handler:           s.plainHandler(),
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	// Start the local per-user traffic poller unless this panel is managed by a
@@ -154,22 +174,53 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	go s.runNodePoller(ctx, enforce)
 	go s.runNotificationPoller(ctx)
 
-	errCh := make(chan error, 1)
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", s.cfg.Port))
+	if err != nil {
+		return err
+	}
+	tlsLn, plainLn := splitTLS(ln)
+
+	errCh := make(chan error, 2)
 	go func() {
-		errCh <- srv.ListenAndServeTLS(s.cfg.CertFile, s.cfg.KeyFile)
+		errCh <- srv.ServeTLS(tlsLn, s.cfg.CertFile, s.cfg.KeyFile)
 	}()
+	go func() {
+		errCh <- plainSrv.Serve(plainLn)
+	}()
+
+	shutdown := func() error {
+		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err := srv.Shutdown(shutCtx)
+		if perr := plainSrv.Shutdown(shutCtx); err == nil {
+			err = perr
+		}
+		return err
+	}
 
 	select {
 	case <-ctx.Done():
-		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		return srv.Shutdown(shutCtx)
+		return shutdown()
 	case err := <-errCh:
-		if err == http.ErrServerClosed {
+		_ = shutdown()
+		if err == http.ErrServerClosed || errors.Is(err, net.ErrClosed) {
 			return nil
 		}
 		return err
 	}
+}
+
+// plainHandler routes plain-HTTP connections on the panel port: only the
+// subscription endpoint is served (client apps like Shadowrocket refuse the
+// self-signed certificate, so subscriptions must work over plain HTTP); every
+// other path redirects to HTTPS.
+func (s *Server) plainHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET "+s.prefix+"/sub/{token}", s.handleSubscription)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "https://"+r.Host+r.RequestURI, http.StatusMovedPermanently)
+	})
+	return securityHeaders(mux)
 }
 
 // protected wraps a handler, redirecting unauthenticated requests to /login.

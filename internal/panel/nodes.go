@@ -55,6 +55,16 @@ func clientSetHash(clients []model.Client) [32]byte {
 	return sha256.Sum256(b)
 }
 
+// isSelfNode reports whether a registered node is this machine itself (added
+// for monitoring). Agent tokens are random per install, so token equality
+// identifies self regardless of how the address was written. A self node is
+// metrics-only: config is applied locally and traffic comes from the local
+// poller, so pushes and traffic polls must skip it — pushing to ourselves
+// would mark this master as a managed node.
+func (s *Server) isSelfNode(n model.Node) bool {
+	return n.Token == s.cfg.AgentToken
+}
+
 // pushToNodes applies the given active client set to every registered node
 // whose last successful push differs from it. A failed push leaves the node's
 // ledger entry stale, so the poller's reconcile pass retries it every tick
@@ -67,6 +77,9 @@ func (s *Server) pushToNodes(ctx context.Context, clients []model.Client) {
 	want := clientSetHash(clients)
 	var wg sync.WaitGroup
 	for _, n := range nodes {
+		if s.isSelfNode(n) {
+			continue
+		}
 		s.pushedMu.Lock()
 		current := s.pushed[n.ID] == want
 		s.pushedMu.Unlock()
@@ -130,6 +143,11 @@ func (s *Server) pollNodesOnce(ctx context.Context) {
 	var active []model.Client
 	var want [32]byte
 	for _, n := range nodes {
+		// Self is covered by the local traffic poller; polling it through the
+		// agent API too would split the reset-on-read counters between them.
+		if s.isSelfNode(n) {
+			continue
+		}
 		c := agent.New(n.Address, n.Token)
 		cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		deltas, err := c.Traffic(cctx)
@@ -306,6 +324,13 @@ func (s *Server) handleNodeCreate(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": "保存失败（名称可能重复）"})
+		return
+	}
+
+	// Self-registration (for monitoring) gets no push: config is already
+	// applied locally, and pushing to ourselves would mark us as managed.
+	if s.isSelfNode(node) {
+		writeJSON(w, map[string]any{"ok": true})
 		return
 	}
 

@@ -291,10 +291,12 @@ func (s *Server) handleClientDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	tr, _ := s.db.GetTraffic(c.ID)
 	s.render(w, "client.html", clientDetailData{
-		Prefix:  s.prefix,
-		Client:  c,
-		Nodes:   nodes,
-		SubURL:  fmt.Sprintf("https://%s%s/sub/%s", r.Host, s.prefix, c.SubToken),
+		Prefix: s.prefix,
+		Client: c,
+		Nodes:  nodes,
+		// http, not https: proxy apps reject the panel's self-signed cert, and
+		// the plain-HTTP side of the listener serves only this endpoint.
+		SubURL:  fmt.Sprintf("http://%s%s/sub/%s", r.Host, s.prefix, c.SubToken),
 		Used:    humanBytes(tr.Up + tr.Down),
 		Quota:   quotaLabel(c.QuotaBytes),
 		Devices: deviceLabel(c.DeviceLimit),
