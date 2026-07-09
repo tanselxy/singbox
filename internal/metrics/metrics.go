@@ -5,6 +5,7 @@ package metrics
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -14,17 +15,23 @@ import (
 // System is a snapshot of host resource usage.
 type System struct {
 	CPUPercent  float64 `json:"cpu_percent"`
+	CPUCores    int     `json:"cpu_cores"`
+	Load1       float64 `json:"load1"`
+	Load5       float64 `json:"load5"`
+	Load15      float64 `json:"load15"`
 	MemUsed     uint64  `json:"mem_used"`
 	MemTotal    uint64  `json:"mem_total"`
 	MemPercent  float64 `json:"mem_percent"`
 	DiskUsed    uint64  `json:"disk_used"`
 	DiskTotal   uint64  `json:"disk_total"`
 	DiskPercent float64 `json:"disk_percent"`
+	NetRxBytes  uint64  `json:"net_rx_bytes"`
+	NetTxBytes  uint64  `json:"net_tx_bytes"`
 }
 
 // Collect gathers a system snapshot. CPU usage is measured over a short window.
 func Collect() System {
-	var s System
+	s := System{CPUCores: runtime.NumCPU()}
 	if total, avail, ok := readMem(); ok {
 		s.MemTotal = total
 		s.MemUsed = total - avail
@@ -35,6 +42,8 @@ func Collect() System {
 		s.DiskUsed = total - free
 		s.DiskPercent = percent(s.DiskUsed, total)
 	}
+	s.Load1, s.Load5, s.Load15 = readLoad()
+	s.NetRxBytes, s.NetTxBytes = readNetDev()
 	s.CPUPercent = readCPUPercent(200 * time.Millisecond)
 	return s
 }
@@ -84,6 +93,54 @@ func readDisk(path string) (total, free uint64, ok bool) {
 	}
 	bsize := uint64(st.Bsize)
 	return st.Blocks * bsize, st.Bavail * bsize, true
+}
+
+func readLoad() (float64, float64, float64) {
+	b, err := os.ReadFile("/proc/loadavg")
+	if err != nil {
+		return 0, 0, 0
+	}
+	fields := strings.Fields(string(b))
+	if len(fields) < 3 {
+		return 0, 0, 0
+	}
+	return parseFloat(fields[0]), parseFloat(fields[1]), parseFloat(fields[2])
+}
+
+func parseFloat(s string) float64 {
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0
+	}
+	return v
+}
+
+func readNetDev() (rx, tx uint64) {
+	b, err := os.ReadFile("/proc/net/dev")
+	if err != nil {
+		return 0, 0
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		name, rest, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		iface := strings.TrimSpace(name)
+		if iface == "" || iface == "lo" {
+			continue
+		}
+		fields := strings.Fields(rest)
+		if len(fields) < 16 {
+			continue
+		}
+		if v, err := strconv.ParseUint(fields[0], 10, 64); err == nil {
+			rx += v
+		}
+		if v, err := strconv.ParseUint(fields[8], 10, 64); err == nil {
+			tx += v
+		}
+	}
+	return rx, tx
 }
 
 // readCPUPercent samples /proc/stat twice over window and returns busy percent.

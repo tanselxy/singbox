@@ -131,7 +131,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		view = "overview"
 	}
 	switch view {
-	case "overview", "clients", "monitoring", "system", "toolbox", "logs":
+	case "overview", "clients", "monitoring", "notifications", "system", "toolbox", "logs":
 	default:
 		http.NotFound(w, r)
 		return

@@ -35,6 +35,9 @@ type Server struct {
 	// pollerCancel stops the local traffic poller; set when a node becomes
 	// managed by a master (see handleAgentApply).
 	pollerCancel context.CancelFunc
+
+	notifyMu   sync.Mutex
+	notifyLast map[string]time.Time
 }
 
 // New builds a panel server from its bootstrap config, opening the client store.
@@ -51,7 +54,7 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open client store: %w", err)
 	}
-	return &Server{cfg: cfg, auth: a, tmpl: tmpl, prefix: "/" + cfg.PathPrefix, db: db}, nil
+	return &Server{cfg: cfg, auth: a, tmpl: tmpl, prefix: "/" + cfg.PathPrefix, db: db, notifyLast: map[string]time.Time{}}, nil
 }
 
 // Handler returns the routed, security-wrapped HTTP handler.
@@ -73,6 +76,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+p+"/api/dashboard", s.protected(s.handleDashboardAPI))
 	mux.HandleFunc("GET "+p+"/api/logs", s.protected(s.handleLogs))
 	mux.HandleFunc("POST "+p+"/api/service/{action}", s.protected(s.handleServiceAction))
+	mux.HandleFunc("GET "+p+"/api/notifications", s.protected(s.handleNotificationsGet))
+	mux.HandleFunc("POST "+p+"/api/notifications", s.protected(s.handleNotificationsSave))
+	mux.HandleFunc("POST "+p+"/api/notifications/test", s.protected(s.handleNotificationsTest))
 
 	// Client management.
 	mux.HandleFunc("POST "+p+"/api/clients", s.protected(s.handleClientCreate))
@@ -136,6 +142,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 	// Master side: poll registered remote nodes for traffic + accumulate.
 	go s.runNodePoller(ctx, enforce)
+	go s.runNotificationPoller(ctx)
 
 	errCh := make(chan error, 1)
 	go func() {

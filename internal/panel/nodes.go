@@ -119,6 +119,10 @@ type nodeRow struct {
 	Address     string
 	Online      bool
 	CPU         string
+	CPUCores    int
+	Load1       float64
+	Load5       float64
+	Load15      float64
 	Mem         string
 	Disk        string
 	CPUPercent  float64
@@ -128,6 +132,8 @@ type nodeRow struct {
 	DiskUsed    uint64
 	DiskTotal   uint64
 	DiskPercent float64
+	NetRxBytes  uint64
+	NetTxBytes  uint64
 }
 
 func (s *Server) handleNodesPage(w http.ResponseWriter, r *http.Request) {
@@ -183,6 +189,10 @@ func (s *Server) nodeRows(ctx context.Context) ([]nodeRow, error) {
 			}
 			rows[i].Online = true
 			rows[i].CPU = strconv.FormatFloat(m.CPUPercent, 'f', 1, 64) + "%"
+			rows[i].CPUCores = m.CPUCores
+			rows[i].Load1 = m.Load1
+			rows[i].Load5 = m.Load5
+			rows[i].Load15 = m.Load15
 			rows[i].Mem = metrics.Format(m.MemUsed) + " / " + metrics.Format(m.MemTotal)
 			rows[i].Disk = metrics.Format(m.DiskUsed) + " / " + metrics.Format(m.DiskTotal)
 			rows[i].CPUPercent = m.CPUPercent
@@ -192,6 +202,8 @@ func (s *Server) nodeRows(ctx context.Context) ([]nodeRow, error) {
 			rows[i].DiskUsed = m.DiskUsed
 			rows[i].DiskTotal = m.DiskTotal
 			rows[i].DiskPercent = m.DiskPercent
+			rows[i].NetRxBytes = m.NetRxBytes
+			rows[i].NetTxBytes = m.NetTxBytes
 		}(i, n)
 	}
 	wg.Wait()

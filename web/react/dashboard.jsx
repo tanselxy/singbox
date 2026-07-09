@@ -5,6 +5,7 @@ import { Shell } from "./dashboard/Shell.jsx";
 import { Clients } from "./dashboard/pages/Clients.jsx";
 import { Logs } from "./dashboard/pages/Logs.jsx";
 import { Monitoring } from "./dashboard/pages/Monitoring.jsx";
+import { Notifications } from "./dashboard/pages/Notifications.jsx";
 import { Overview } from "./dashboard/pages/Overview.jsx";
 import { System } from "./dashboard/pages/System.jsx";
 import { Toolbox } from "./dashboard/pages/Toolbox.jsx";
@@ -19,6 +20,7 @@ function DashboardRoutes({ data, error, loadDashboard, prefix, serviceAction }) 
         <Route index element={<Overview data={data} onServiceAction={serviceAction} />} />
         <Route path="clients" element={<Clients data={data} refresh={loadDashboard} prefix={prefix} />} />
         <Route path="monitoring" element={<Monitoring prefix={prefix} />} />
+        <Route path="notifications" element={<Notifications prefix={prefix} />} />
         <Route path="system" element={<System data={data} prefix={prefix} />} />
         <Route path="toolbox" element={<Toolbox data={data} refresh={loadDashboard} prefix={prefix} />} />
         <Route path="logs" element={<Logs prefix={prefix} />} />

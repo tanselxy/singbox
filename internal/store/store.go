@@ -68,6 +68,10 @@ CREATE TABLE IF NOT EXISTS nodes (
     token       TEXT NOT NULL,
     server_json TEXT NOT NULL DEFAULT '',
     created_at  INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );`
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("migrate: %w", err)
@@ -83,6 +87,26 @@ CREATE TABLE IF NOT EXISTS nodes (
 		}
 	}
 	return nil
+}
+
+// GetSetting returns a persisted string setting.
+func (s *Store) GetSetting(key string) (string, error) {
+	var value string
+	err := s.db.QueryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return value, err
+}
+
+// SetSetting persists a string setting.
+func (s *Store) SetSetting(key, value string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO settings (key, value) VALUES (?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		key, value,
+	)
+	return err
 }
 
 // CreateClient inserts a client and returns it with its assigned ID.
