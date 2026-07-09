@@ -163,6 +163,14 @@ button.warn {
   color: var(--down);
 }
 button.warn:hover { background: color-mix(in oklch, var(--down-soft) 72%, var(--down)); }
+button.secondary {
+  background: var(--background);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+button.secondary:hover {
+  background: var(--surface-subtle);
+}
 button.link { min-height: auto; background: none; color: var(--muted); border: none; padding: 0; }
 button.copy { background: var(--background); color: var(--accent); border: 1px solid var(--border); padding: 4px 10px; }
 
@@ -247,6 +255,98 @@ table.clients tbody tr:hover { background: color-mix(in oklch, var(--muted-surfa
 .add-form .field input { flex: 1; min-width: 90px; }
 .small { font-size: 12px; margin: 4px 0 12px; }
 
+.modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: oklch(0 0 0 / 56%);
+  backdrop-filter: blur(10px);
+}
+
+.modal-card {
+  width: min(560px, 100%);
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 2);
+  box-shadow: 0 24px 80px oklch(0 0 0 / 34%);
+}
+
+.modal-head,
+.modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+}
+
+.modal-head {
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-head h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.modal-close {
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+  background: var(--surface-subtle);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  background: var(--background);
+  color: var(--text);
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-foot {
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.form-field {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.form-field.wide {
+  grid-column: 1 / -1;
+}
+
+.input-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.input-group input,
+.input-group select {
+  margin: 0;
+}
+
 /* system & security rows */
 .sys-row {
   display: flex;
@@ -279,14 +379,6 @@ table.clients tbody tr:hover { background: color-mix(in oklch, var(--muted-surfa
   border-radius: calc(var(--radius) * 1.8);
   padding: 12px;
   box-shadow: var(--shadow);
-}
-
-.sidebar-title {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 8px 10px;
-  text-transform: uppercase;
 }
 
 .side-link {
@@ -342,6 +434,35 @@ table.clients tbody tr:hover { background: color-mix(in oklch, var(--muted-surfa
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.7);
+}
+
+.segmented button {
+  min-height: 28px;
+  padding: 4px 11px;
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+}
+
+.segmented button:hover {
+  background: color-mix(in oklch, var(--card) 78%, var(--primary));
+  color: var(--text);
+}
+
+.segmented button.active {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow);
 }
 
 .service-card {
@@ -441,6 +562,168 @@ table.clients tbody tr:hover { background: color-mix(in oklch, var(--muted-surfa
   background: var(--surface-subtle);
 }
 
+.logs-table-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.logs-toolbar {
+  padding-bottom: 6px;
+}
+
+.logs-table th:nth-child(1),
+.logs-table td:nth-child(1) {
+  width: 210px;
+}
+
+.logs-table th:nth-child(2),
+.logs-table td:nth-child(2) {
+  width: 260px;
+}
+
+.log-time,
+.log-source {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.log-message {
+  max-width: 0;
+  word-break: break-word;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.pager button {
+  background: var(--background);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.empty-state {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  border: 1px dashed var(--border);
+  border-radius: calc(var(--radius) * 1.6);
+  background: var(--surface-subtle);
+}
+
+.monitor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.monitor-card {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+  background:
+    radial-gradient(circle at 18% 0%, color-mix(in oklch, var(--primary) 9%, transparent), transparent 32%),
+    var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.8);
+}
+
+.monitor-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.monitor-card h4 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.monitor-card p {
+  margin: 4px 0 0;
+  word-break: break-all;
+}
+
+.monitor-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metric-block {
+  --metric-color: var(--primary);
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  background: color-mix(in oklch, var(--card) 86%, transparent);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.5);
+}
+
+.metric-block.cpu { --metric-color: var(--primary); }
+.metric-block.mem { --metric-color: var(--ok); }
+.metric-block.disk { --metric-color: var(--warn); }
+
+.metric-block-top {
+  display: grid;
+  gap: 2px;
+}
+
+.metric-block-top span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metric-block-top strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-bar {
+  height: 7px;
+  overflow: hidden;
+  background: color-mix(in oklch, var(--metric-color) 12%, transparent);
+  border-radius: 999px;
+}
+
+.usage-bar span {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--metric-color);
+  border-radius: inherit;
+  transition: width 320ms ease;
+}
+
+.sparkline {
+  width: 100%;
+  height: 54px;
+  overflow: visible;
+}
+
+.sparkline polygon {
+  fill: color-mix(in oklch, var(--metric-color) 18%, transparent);
+}
+
+.sparkline polyline {
+  fill: none;
+  stroke: var(--metric-color);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.8;
+  vector-effect: non-scaling-stroke;
+}
+
 .sr-fallback {
   position: absolute;
   width: 1px;
@@ -463,17 +746,14 @@ table.clients tbody tr:hover { background: color-mix(in oklch, var(--muted-surfa
     overflow-x: auto;
   }
 
-  .sidebar-title {
-    display: none;
-  }
-
   .side-link {
     white-space: nowrap;
   }
 
   .service-card,
   .metric-grid,
-  .quick-grid {
+  .quick-grid,
+  .monitor-metrics {
     grid-template-columns: 1fr;
   }
 

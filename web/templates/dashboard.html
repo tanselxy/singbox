@@ -3,16 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>控制台 · Sing-Box 面板</title>
+  <title>Sing-Box 面板</title>
   <link rel="stylesheet" href="{{.Prefix}}/static/style.css">
 </head>
 <body data-prefix="{{.Prefix}}">
   <header class="topbar">
     <strong>Sing-Box 面板</strong>
     <nav>
-      <a href="{{.Prefix}}/dashboard">控制台</a>
-      <a href="{{.Prefix}}/nodes">节点</a>
-      <a href="{{.Prefix}}/tools">节点转换</a>
       <form method="post" action="{{.Prefix}}/logout" class="inline">
         <button type="submit" class="link">退出</button>
       </form>
@@ -21,10 +18,10 @@
 
   <div id="dashboard-root" class="dashboard-root" data-prefix="{{.Prefix}}" data-view="{{.View}}">
     <section class="card">
-      <h1>控制台加载中</h1>
-      <p class="muted">正在加载 React 控制台。</p>
+      <h1>面板加载中</h1>
+      <p class="muted">正在加载总览数据。</p>
       <noscript>
-        <p class="alert">浏览器需要启用 JavaScript 才能使用控制台。</p>
+        <p class="alert">浏览器需要启用 JavaScript 才能使用面板。</p>
       </noscript>
       <div class="sr-fallback">
         {{range .Clients}}{{.Name}} {{end}}

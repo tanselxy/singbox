@@ -25,15 +25,19 @@ import (
 // ---- view models ----
 
 type clientRow struct {
-	ID        int64
-	Name      string
-	Enabled   bool
-	Used      string
-	Quota     string
-	OverQuota bool
-	Devices   string
-	Expiry    string
-	Expired   bool
+	ID            int64
+	Name          string
+	Enabled       bool
+	Used          string
+	Quota         string
+	QuotaValue    string
+	QuotaUnit     string
+	OverQuota     bool
+	Devices       string
+	DeviceLimit   int
+	Expiry        string
+	ExpiresAtDate string
+	Expired       bool
 }
 
 type dashboardData struct {
@@ -127,7 +131,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		view = "overview"
 	}
 	switch view {
-	case "overview", "clients", "monitoring", "system", "logs":
+	case "overview", "clients", "monitoring", "system", "toolbox", "logs":
 	default:
 		http.NotFound(w, r)
 		return
@@ -172,16 +176,21 @@ func (s *Server) dashboardData(ctx context.Context) (dashboardData, error) {
 		if c.ExpiresAt > 0 && now >= c.ExpiresAt {
 			summary.ExpiredClients++
 		}
+		quotaValue, quotaUnit := quotaFormFields(c.QuotaBytes)
 		rows = append(rows, clientRow{
-			ID:        c.ID,
-			Name:      c.Name,
-			Enabled:   c.Enabled,
-			Used:      humanBytes(used),
-			Quota:     quotaLabel(c.QuotaBytes),
-			OverQuota: c.QuotaBytes > 0 && used >= c.QuotaBytes,
-			Devices:   deviceLabel(c.DeviceLimit),
-			Expiry:    expiryLabel(c.ExpiresAt),
-			Expired:   c.ExpiresAt > 0 && now >= c.ExpiresAt,
+			ID:            c.ID,
+			Name:          c.Name,
+			Enabled:       c.Enabled,
+			Used:          humanBytes(used),
+			Quota:         quotaLabel(c.QuotaBytes),
+			QuotaValue:    quotaValue,
+			QuotaUnit:     quotaUnit,
+			OverQuota:     c.QuotaBytes > 0 && used >= c.QuotaBytes,
+			Devices:       deviceLabel(c.DeviceLimit),
+			DeviceLimit:   c.DeviceLimit,
+			Expiry:        expiryLabel(c.ExpiresAt),
+			ExpiresAtDate: expiryInputDate(c.ExpiresAt),
+			Expired:       c.ExpiresAt > 0 && now >= c.ExpiresAt,
 		})
 	}
 	return dashboardData{
@@ -340,6 +349,26 @@ func (s *Server) handleClientAction(w http.ResponseWriter, r *http.Request) {
 
 	var regen bool
 	switch action {
+	case "update":
+		if err := r.ParseForm(); err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": "bad form"})
+			return
+		}
+		c, getErr := s.db.GetClient(id)
+		if getErr != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": getErr.Error()})
+			return
+		}
+		name := strings.TrimSpace(r.PostFormValue("name"))
+		if name == "" {
+			writeJSON(w, map[string]any{"ok": false, "error": "客户名不能为空"})
+			return
+		}
+		c.Name = name
+		c.QuotaBytes = parseQuota(r.PostFormValue("quota"), r.PostFormValue("quota_unit"))
+		c.DeviceLimit = parseIntDefault(r.PostFormValue("device_limit"), 0)
+		c.ExpiresAt = parseExpiry(r.PostFormValue("expires_at"))
+		err, regen = s.db.UpdateClient(c), true
 	case "enable":
 		err, regen = s.db.SetEnabled(id, true), true
 	case "disable":
@@ -432,12 +461,84 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
-	out, err := system.Output(r.Context(), "journalctl", "-u", singbox.ServiceTag, "-n", "100", "--no-pager")
-	if err != nil {
-		out = "无法读取日志: " + err.Error()
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
 	}
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = w.Write([]byte(out))
+	size, _ := strconv.Atoi(r.URL.Query().Get("size"))
+	if size < 1 {
+		size = 50
+	}
+	if size > 100 {
+		size = 100
+	}
+	if page > 20 {
+		page = 20
+	}
+
+	fetchCount := page*size + 1
+	out, err := system.Output(r.Context(), "journalctl", "-u", singbox.ServiceTag, "-n", strconv.Itoa(fetchCount), "-o", "short-iso", "--no-pager")
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "无法读取日志: " + err.Error()})
+		return
+	}
+	lines := compactLines(out)
+	end := len(lines) - (page-1)*size
+	if end < 0 {
+		end = 0
+	}
+	start := end - size
+	if start < 0 {
+		start = 0
+	}
+	if start > end {
+		start = end
+	}
+	entries := make([]logEntry, 0, end-start)
+	for _, line := range lines[start:end] {
+		entries = append(entries, parseLogEntry(line))
+	}
+	writeJSON(w, map[string]any{
+		"ok":       true,
+		"page":     page,
+		"size":     size,
+		"has_more": len(lines) > page*size,
+		"entries":  entries,
+	})
+}
+
+type logEntry struct {
+	Time    string `json:"time"`
+	Source  string `json:"source"`
+	Message string `json:"message"`
+}
+
+func compactLines(out string) []string {
+	raw := strings.Split(strings.TrimSpace(out), "\n")
+	lines := make([]string, 0, len(raw))
+	for _, line := range raw {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func parseLogEntry(line string) logEntry {
+	fields := strings.Fields(line)
+	if len(fields) < 3 {
+		return logEntry{Message: line}
+	}
+	msgStart := strings.Index(line, fields[2])
+	if msgStart < 0 {
+		msgStart = len(fields[0]) + len(fields[1]) + 2
+	}
+	source, msg, ok := strings.Cut(strings.TrimSpace(line[msgStart:]), ": ")
+	if !ok {
+		return logEntry{Time: fields[0], Source: fields[1], Message: strings.TrimSpace(line[msgStart:])}
+	}
+	return logEntry{Time: fields[0], Source: strings.TrimSpace(source), Message: strings.TrimSpace(msg)}
 }
 
 func (s *Server) handleServiceAction(w http.ResponseWriter, r *http.Request) {
@@ -517,6 +618,18 @@ func quotaLabel(quotaBytes int64) string {
 	return humanBytes(quotaBytes)
 }
 
+func quotaFormFields(quotaBytes int64) (string, string) {
+	if quotaBytes <= 0 {
+		return "", "GB"
+	}
+	const mb = int64(1024 * 1024)
+	const gb = int64(1024 * 1024 * 1024)
+	if quotaBytes%gb == 0 {
+		return strconv.FormatInt(quotaBytes/gb, 10), "GB"
+	}
+	return strconv.FormatFloat(float64(quotaBytes)/float64(mb), 'f', -1, 64), "MB"
+}
+
 func deviceLabel(n int) string {
 	if n <= 0 {
 		return "不限"
@@ -528,7 +641,14 @@ func expiryLabel(expiresAt int64) string {
 	if expiresAt <= 0 {
 		return "永久"
 	}
-	return time.Unix(expiresAt, 0).UTC().Format("2006-01-02")
+	return expiryInputDate(expiresAt)
+}
+
+func expiryInputDate(expiresAt int64) string {
+	if expiresAt <= 0 {
+		return ""
+	}
+	return time.Unix(expiresAt-1, 0).UTC().Format("2006-01-02")
 }
 
 // parseQuota converts a value + unit ("MB" or "GB") into bytes. 0 = unlimited.

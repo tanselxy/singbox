@@ -114,13 +114,20 @@ func (s *Server) pollNodesOnce(ctx context.Context) {
 // ---- node management handlers (master side) ----
 
 type nodeRow struct {
-	ID      int64
-	Name    string
-	Address string
-	Online  bool
-	CPU     string
-	Mem     string
-	Disk    string
+	ID          int64
+	Name        string
+	Address     string
+	Online      bool
+	CPU         string
+	Mem         string
+	Disk        string
+	CPUPercent  float64
+	MemUsed     uint64
+	MemTotal    uint64
+	MemPercent  float64
+	DiskUsed    uint64
+	DiskTotal   uint64
+	DiskPercent float64
 }
 
 func (s *Server) handleNodesPage(w http.ResponseWriter, r *http.Request) {
@@ -178,6 +185,13 @@ func (s *Server) nodeRows(ctx context.Context) ([]nodeRow, error) {
 			rows[i].CPU = strconv.FormatFloat(m.CPUPercent, 'f', 1, 64) + "%"
 			rows[i].Mem = metrics.Format(m.MemUsed) + " / " + metrics.Format(m.MemTotal)
 			rows[i].Disk = metrics.Format(m.DiskUsed) + " / " + metrics.Format(m.DiskTotal)
+			rows[i].CPUPercent = m.CPUPercent
+			rows[i].MemUsed = m.MemUsed
+			rows[i].MemTotal = m.MemTotal
+			rows[i].MemPercent = m.MemPercent
+			rows[i].DiskUsed = m.DiskUsed
+			rows[i].DiskTotal = m.DiskTotal
+			rows[i].DiskPercent = m.DiskPercent
 		}(i, n)
 	}
 	wg.Wait()
@@ -250,6 +264,28 @@ func (s *Server) handleNodeDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.db.DeleteNode(id); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+func (s *Server) handleNodeUpdate(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "bad id"})
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "bad form"})
+		return
+	}
+	name := strings.TrimSpace(r.PostFormValue("name"))
+	if name == "" {
+		writeJSON(w, map[string]any{"ok": false, "error": "节点名不能为空"})
+		return
+	}
+	if err := s.db.UpdateNodeName(id, name); err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}

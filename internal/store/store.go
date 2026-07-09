@@ -162,6 +162,16 @@ func (s *Store) GetClientByToken(token string) (model.Client, error) {
 	return c, err
 }
 
+// UpdateClient updates editable client metadata while keeping credentials and
+// accumulated traffic intact.
+func (s *Store) UpdateClient(c model.Client) error {
+	_, err := s.db.Exec(
+		`UPDATE clients SET name = ?, quota_bytes = ?, device_limit = ?, expires_at = ? WHERE id = ?`,
+		c.Name, c.QuotaBytes, c.DeviceLimit, c.ExpiresAt, c.ID,
+	)
+	return err
+}
+
 // SetEnabled toggles a client's enabled flag.
 func (s *Store) SetEnabled(id int64, enabled bool) error {
 	_, err := s.db.Exec(`UPDATE clients SET enabled = ? WHERE id = ?`, boolInt(enabled), id)
@@ -232,6 +242,12 @@ func (s *Store) GetNode(id int64) (model.Node, error) {
 // UpdateNodeServer refreshes a node's cached server JSON.
 func (s *Store) UpdateNodeServer(id int64, serverJSON string) error {
 	_, err := s.db.Exec(`UPDATE nodes SET server_json = ? WHERE id = ?`, serverJSON, id)
+	return err
+}
+
+// UpdateNodeName updates the display name for a registered node.
+func (s *Store) UpdateNodeName(id int64, name string) error {
+	_, err := s.db.Exec(`UPDATE nodes SET name = ? WHERE id = ?`, name, id)
 	return err
 }
 

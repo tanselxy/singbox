@@ -89,6 +89,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+p+"/nodes", s.protected(s.handleNodesPage))
 	mux.HandleFunc("GET "+p+"/api/node-metrics", s.protected(s.handleNodeMetricsAPI))
 	mux.HandleFunc("POST "+p+"/api/nodes", s.protected(s.handleNodeCreate))
+	mux.HandleFunc("POST "+p+"/api/nodes/{id}/update", s.protected(s.handleNodeUpdate))
 	mux.HandleFunc("POST "+p+"/api/nodes/{id}/delete", s.protected(s.handleNodeDelete))
 
 	// Subscription endpoint: token-authenticated (no login), for client apps.
