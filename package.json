@@ -1,12 +1,24 @@
 {
   "scripts": {
     "build:dashboard": "esbuild web/react/dashboard.jsx --bundle --format=iife --global-name=DashboardApp --outfile=web/static/dashboard-react.js --loader:.jsx=jsx --jsx=automatic",
-    "build:dashboard:min": "npm run build:dashboard -- --minify"
+    "build:dashboard:min": "npm run build:dashboard -- --minify",
+    "build:css": "tailwindcss -i web/react/app.css -o web/static/dashboard.css --minify",
+    "build": "npm run build:css && npm run build:dashboard:min"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.19",
+    "@radix-ui/react-slot": "^1.3.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "esbuild": "^0.25.0",
+    "lucide-react": "^1.23.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router": "^8.2.0"
+    "react-router": "^8.2.0",
+    "tailwind-merge": "^3.6.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.2",
+    "tailwindcss": "^4.3.2"
   }
 }

@@ -4,29 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sing-Box 面板</title>
-  <link rel="stylesheet" href="{{.Prefix}}/static/style.css">
+  <link rel="stylesheet" href="{{.Prefix}}/static/dashboard.css">
 </head>
-<body data-prefix="{{.Prefix}}">
-  <header class="topbar">
-    <strong>Sing-Box 面板</strong>
-    <nav>
-      <form method="post" action="{{.Prefix}}/logout" class="inline">
-        <button type="submit" class="link">退出</button>
-      </form>
-    </nav>
+<body data-prefix="{{.Prefix}}" class="bg-background text-foreground antialiased">
+  <header class="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:px-6">
+    <strong class="text-sm font-semibold tracking-tight">Sing-Box 面板</strong>
+    <form method="post" action="{{.Prefix}}/logout">
+      <button type="submit" class="inline-flex h-8 items-center rounded-md px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer">退出</button>
+    </form>
   </header>
 
-  <div id="dashboard-root" class="dashboard-root" data-prefix="{{.Prefix}}" data-view="{{.View}}">
-    <section class="card">
-      <h1>面板加载中</h1>
-      <p class="muted">正在加载总览数据。</p>
-      <noscript>
-        <p class="alert">浏览器需要启用 JavaScript 才能使用面板。</p>
-      </noscript>
-      <div class="sr-fallback">
-        {{range .Clients}}{{.Name}} {{end}}
-      </div>
-    </section>
+  <div id="dashboard-root" data-prefix="{{.Prefix}}" data-view="{{.View}}">
+    <div class="p-6 text-sm text-muted-foreground">
+      正在加载面板…
+      <noscript><span class="text-destructive"> 浏览器需要启用 JavaScript 才能使用面板。</span></noscript>
+    </div>
+    <div class="sr-only">{{range .Clients}}{{.Name}} {{end}}</div>
   </div>
 
   <script src="{{.Prefix}}/static/dashboard-react.js"></script>

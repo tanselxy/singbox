@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { PageHead } from "../components.jsx";
 import { VIEW_META } from "../constants.js";
+import { Button } from "../../ui/button.jsx";
+import { Card, CardContent } from "../../ui/card.jsx";
 
 export function System({ data, prefix }) {
   const [latest, setLatest] = useState("");
@@ -37,19 +39,21 @@ export function System({ data, prefix }) {
   return (
     <>
       <PageHead meta={VIEW_META.system} />
-      <section className="card">
-        <div className="sys-row">
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="muted">面板版本</div>
-            <span className="mono">{data.Version}</span>
-            <span className="small muted"> {latest}</span>
+            <div className="text-sm text-muted-foreground">面板版本</div>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="font-mono">{data.Version}</span>
+              <span className="text-sm text-muted-foreground">{latest}</span>
+            </div>
           </div>
-          <span className="field compact-field">
-            <button onClick={checkUpdate}>检查更新</button>
-            {upgradeLabel && <button onClick={upgrade}>{upgradeLabel}</button>}
-          </span>
-        </div>
-      </section>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={checkUpdate}>检查更新</Button>
+            {upgradeLabel && <Button onClick={upgrade}>{upgradeLabel}</Button>}
+          </div>
+        </CardContent>
+      </Card>
     </>
   );
 }

@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { PageHead } from "../components.jsx";
 import { VIEW_META } from "../constants.js";
+import { Button } from "../../ui/button.jsx";
+import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card.jsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../ui/table.jsx";
 
 export function Logs({ prefix }) {
   const [entries, setEntries] = useState([]);
@@ -41,36 +44,40 @@ export function Logs({ prefix }) {
   return (
     <>
       <PageHead meta={VIEW_META.logs} />
-      <section className="card logs-table-panel">
-        <div className="node-head logs-toolbar">
-          <h3>最近日志</h3>
-          <span className="muted small">第 {page} 页，每页 {pageSize} 行</span>
-        </div>
-        <div className="table-wrap">
-          <table className="clients logs-table">
-            <thead>
-              <tr><th>时间</th><th>来源</th><th>内容</th></tr>
-            </thead>
-            <tbody>
-              {loading && <tr><td colSpan="3" className="muted">正在加载日志。</td></tr>}
-              {!loading && error && <tr><td colSpan="3" className="alert">{error}</td></tr>}
-              {!loading && !error && entries.length === 0 && <tr><td colSpan="3" className="muted">暂无日志。</td></tr>}
+      <Card>
+        <CardHeader>
+          <CardTitle>最近日志</CardTitle>
+          <span className="text-sm text-muted-foreground">第 {page} 页，每页 {pageSize} 行</span>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>时间</TableHead>
+                <TableHead>来源</TableHead>
+                <TableHead>内容</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading && <TableRow><TableCell colSpan="3" className="text-muted-foreground">正在加载日志。</TableCell></TableRow>}
+              {!loading && error && <TableRow><TableCell colSpan="3" className="text-destructive">{error}</TableCell></TableRow>}
+              {!loading && !error && entries.length === 0 && <TableRow><TableCell colSpan="3" className="text-muted-foreground">暂无日志。</TableCell></TableRow>}
               {!loading && !error && entries.map((entry, index) => (
-                <tr key={`${entry.time}-${index}`}>
-                  <td className="mono small log-time">{entry.time || "-"}</td>
-                  <td className="mono small log-source">{entry.source || "-"}</td>
-                  <td className="log-message">{entry.message || "-"}</td>
-                </tr>
+                <TableRow key={`${entry.time}-${index}`}>
+                  <TableCell className="font-mono text-xs whitespace-nowrap text-muted-foreground">{entry.time || "-"}</TableCell>
+                  <TableCell className="font-mono text-xs whitespace-nowrap text-muted-foreground">{entry.source || "-"}</TableCell>
+                  <TableCell className="font-mono text-xs break-all">{entry.message || "-"}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="pager">
-          <button onClick={() => loadLogs(page - 1)} disabled={loading || page <= 1}>上一页</button>
-          <span className="muted small">第 {page} 页</span>
-          <button onClick={() => loadLogs(page + 1)} disabled={loading || !hasMore}>下一页</button>
-        </div>
-      </section>
+            </TableBody>
+          </Table>
+          <div className="mt-4 flex items-center justify-center gap-4">
+            <Button variant="outline" size="sm" onClick={() => loadLogs(page - 1)} disabled={loading || page <= 1}>上一页</Button>
+            <span className="text-sm text-muted-foreground">第 {page} 页</span>
+            <Button variant="outline" size="sm" onClick={() => loadLogs(page + 1)} disabled={loading || !hasMore}>下一页</Button>
+          </div>
+        </CardContent>
+      </Card>
     </>
   );
 }

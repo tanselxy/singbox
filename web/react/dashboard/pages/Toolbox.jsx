@@ -1,5 +1,7 @@
 import { Badge, PageHead } from "../components.jsx";
 import { VIEW_META } from "../constants.js";
+import { Button } from "../../ui/button.jsx";
+import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card.jsx";
 
 async function runSystemAction(prefix, action, refresh) {
   const res = await fetch(`${prefix}/api/system/${action}`, { method: "POST" });
@@ -12,39 +14,58 @@ async function runSystemAction(prefix, action, refresh) {
   refresh();
 }
 
+function ToggleRow({ label, active, activeText, inactiveText, actionText, onAction }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4 border-b py-4 last:border-0">
+      <div>
+        <div className="text-sm text-muted-foreground">{label}</div>
+        <div className="mt-1"><Badge active={active}>{active ? activeText : inactiveText}</Badge></div>
+      </div>
+      <Button variant="outline" onClick={onAction} disabled={active}>{actionText}</Button>
+    </div>
+  );
+}
+
 export function Toolbox({ data, refresh, prefix }) {
   const system = data.System || {};
   return (
     <>
       <PageHead meta={VIEW_META.toolbox} />
-      <section className="card">
-        <div className="sys-row">
-          <div>
-            <div className="muted">BBR + TCP 优化</div>
-            <Badge active={system.BBR}>{system.BBR ? "已开启" : "未开启"}</Badge>
-          </div>
-          <button onClick={() => runSystemAction(prefix, "bbr", refresh)} disabled={system.BBR}>开启 BBR</button>
-        </div>
-        <div className="sys-row">
-          <div>
-            <div className="muted">fail2ban（SSH 防爆破）</div>
-            <Badge active={system.Fail2ban}>{system.Fail2ban ? "运行中" : "未安装"}</Badge>
-          </div>
-          <button onClick={() => runSystemAction(prefix, "fail2ban", refresh)} disabled={system.Fail2ban}>安装并启用</button>
-        </div>
-      </section>
+      <Card>
+        <CardContent className="py-0">
+          <ToggleRow
+            label="BBR + TCP 优化"
+            active={system.BBR}
+            activeText="已开启"
+            inactiveText="未开启"
+            actionText="开启 BBR"
+            onAction={() => runSystemAction(prefix, "bbr", refresh)}
+          />
+          <ToggleRow
+            label="fail2ban（SSH 防爆破）"
+            active={system.Fail2ban}
+            activeText="运行中"
+            inactiveText="未安装"
+            actionText="安装并启用"
+            onAction={() => runSystemAction(prefix, "fail2ban", refresh)}
+          />
+        </CardContent>
+      </Card>
 
-      <section className="card">
-        <div className="node-head">
-          <h3>配置工具</h3>
-        </div>
-        <div className="quick-grid">
-          <a className="quick-link" href={`${prefix}/tools`}>
-            <strong>节点转换</strong>
-            <span className="muted">把节点链接转换成 Clash 代理片段</span>
-          </a>
-        </div>
-      </section>
+      <div className="mt-6">
+        <Card>
+          <CardHeader><CardTitle>配置工具</CardTitle></CardHeader>
+          <CardContent>
+            <a
+              className="flex flex-col gap-1 rounded-lg border p-4 transition-colors hover:bg-accent"
+              href={`${prefix}/tools`}
+            >
+              <strong className="text-sm">节点转换</strong>
+              <span className="text-sm text-muted-foreground">把节点链接转换成 Clash 代理片段</span>
+            </a>
+          </CardContent>
+        </Card>
+      </div>
     </>
   );
 }

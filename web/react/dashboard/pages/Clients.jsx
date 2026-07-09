@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { Badge, ModalFrame, PageHead } from "../components.jsx";
 import { VIEW_META } from "../constants.js";
+import { Button } from "../../ui/button.jsx";
+import { Card, CardContent } from "../../ui/card.jsx";
+import { Input, Select } from "../../ui/input.jsx";
+import { Label } from "../../ui/label.jsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../ui/table.jsx";
 
 const EMPTY_CLIENT_FORM = { name: "", quota: "", quotaUnit: "GB", devices: "", expires: "" };
 
@@ -72,36 +77,55 @@ export function Clients({ data, refresh, prefix }) {
 
   return (
     <>
-      <PageHead meta={VIEW_META.clients} action={<button onClick={openCreate}>+ 新增客户</button>} />
-      <section className="card">
-        <p className="muted small">流量/到期到点会自动停用该客户；设备数目前仅记录，暂不自动限制。</p>
-        <div className="table-wrap">
-          <table className="clients">
-            <thead>
-              <tr><th>名称</th><th>状态</th><th>已用</th><th>配额</th><th>设备</th><th>到期</th><th>操作</th></tr>
-            </thead>
-            <tbody>
-              {clients.length === 0 && <tr><td colSpan="7" className="muted">还没有客户，点右上角新增。</td></tr>}
+      <PageHead meta={VIEW_META.clients} action={<Button onClick={openCreate}>+ 新增客户</Button>} />
+      <Card>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">流量/到期到点会自动停用该客户；设备数目前仅记录，暂不自动限制。</p>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>名称</TableHead>
+                <TableHead>状态</TableHead>
+                <TableHead>已用</TableHead>
+                <TableHead>配额</TableHead>
+                <TableHead>设备</TableHead>
+                <TableHead>到期</TableHead>
+                <TableHead>操作</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {clients.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan="7" className="text-muted-foreground">还没有客户，点右上角新增。</TableCell>
+                </TableRow>
+              )}
               {clients.map((client) => (
-                <tr key={client.ID}>
-                  <td><a href={`${prefix}/client/${client.ID}`}>{client.Name}</a></td>
-                  <td><Badge active={client.Enabled}>{client.Enabled ? "启用" : "停用"}</Badge></td>
-                  <td className={client.OverQuota ? "alert" : ""}>{client.Used}</td>
-                  <td>{client.Quota}</td>
-                  <td>{client.Devices}</td>
-                  <td className={client.Expired ? "alert" : ""}>{client.Expiry}</td>
-                  <td className="row-actions">
-                    <button onClick={() => openEdit(client)}>编辑</button>
-                    <button onClick={() => clientAction(client, client.Enabled ? "disable" : "enable")}>{client.Enabled ? "停用" : "启用"}</button>
-                    <button onClick={() => clientAction(client, "reset-traffic")}>清零流量</button>
-                    <button className="warn" onClick={() => clientAction(client, "delete")}>删除</button>
-                  </td>
-                </tr>
+                <TableRow key={client.ID}>
+                  <TableCell>
+                    <a className="font-medium text-primary hover:underline" href={`${prefix}/client/${client.ID}`}>{client.Name}</a>
+                  </TableCell>
+                  <TableCell><Badge active={client.Enabled}>{client.Enabled ? "启用" : "停用"}</Badge></TableCell>
+                  <TableCell className={client.OverQuota ? "text-destructive" : ""}>{client.Used}</TableCell>
+                  <TableCell>{client.Quota}</TableCell>
+                  <TableCell>{client.Devices}</TableCell>
+                  <TableCell className={client.Expired ? "text-destructive" : ""}>{client.Expiry}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Button variant="outline" size="sm" onClick={() => openEdit(client)}>编辑</Button>
+                      <Button variant="outline" size="sm" onClick={() => clientAction(client, client.Enabled ? "disable" : "enable")}>
+                        {client.Enabled ? "停用" : "启用"}
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => clientAction(client, "reset-traffic")}>清零流量</Button>
+                      <Button variant="destructive" size="sm" onClick={() => clientAction(client, "delete")}>删除</Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
       <ClientCreateDialog
         open={open}
         form={form}
@@ -125,32 +149,31 @@ function ClientCreateDialog({ open, form, creating, editing, onChange, onCancel,
       onCancel={onCancel}
       eyebrow="Client"
       title={editing ? "编辑客户" : "新增客户"}
-      titleId="create-client-title"
       footer={
         <>
-          <button className="secondary" onClick={onCancel} disabled={creating}>取消</button>
-          <button onClick={onSubmit} disabled={creating}>{creating ? "保存中..." : editing ? "保存修改" : "确认创建"}</button>
+          <Button variant="outline" onClick={onCancel} disabled={creating}>取消</Button>
+          <Button onClick={onSubmit} disabled={creating}>{creating ? "保存中..." : editing ? "保存修改" : "确认创建"}</Button>
         </>
       }
     >
-      <label className="form-field wide">客户名
-        <input value={form.name} onChange={(e) => onChange({ ...form, name: e.target.value })} type="text" placeholder="例如 tansel" autoFocus />
-      </label>
-      <label className="form-field">流量配额
-        <span className="input-group">
-          <input value={form.quota} onChange={(e) => onChange({ ...form, quota: e.target.value })} type="number" min="0" step="1" placeholder="留空不限" />
-          <select value={form.quotaUnit} onChange={(e) => onChange({ ...form, quotaUnit: e.target.value })}>
+      <Label>客户名
+        <Input value={form.name} onChange={(e) => onChange({ ...form, name: e.target.value })} placeholder="例如 tansel" autoFocus />
+      </Label>
+      <Label>流量配额
+        <div className="flex gap-2">
+          <Input value={form.quota} onChange={(e) => onChange({ ...form, quota: e.target.value })} type="number" min="0" step="1" placeholder="留空不限" />
+          <Select value={form.quotaUnit} onChange={(e) => onChange({ ...form, quotaUnit: e.target.value })} className="w-24">
             <option value="GB">GB</option>
             <option value="MB">MB</option>
-          </select>
-        </span>
-      </label>
-      <label className="form-field">设备数
-        <input value={form.devices} onChange={(e) => onChange({ ...form, devices: e.target.value })} type="number" min="0" step="1" placeholder="0 = 不限" />
-      </label>
-      <label className="form-field wide">到期日期
-        <input value={form.expires} onChange={(e) => onChange({ ...form, expires: e.target.value })} type="date" title="到期日期（留空=永久）" />
-      </label>
+          </Select>
+        </div>
+      </Label>
+      <Label>设备数
+        <Input value={form.devices} onChange={(e) => onChange({ ...form, devices: e.target.value })} type="number" min="0" step="1" placeholder="0 = 不限" />
+      </Label>
+      <Label>到期日期
+        <Input value={form.expires} onChange={(e) => onChange({ ...form, expires: e.target.value })} type="date" title="到期日期（留空=永久）" />
+      </Label>
     </ModalFrame>
   );
 }

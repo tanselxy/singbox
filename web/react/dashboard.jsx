@@ -11,8 +11,8 @@ import { Toolbox } from "./dashboard/pages/Toolbox.jsx";
 
 function DashboardRoutes({ data, error, loadDashboard, prefix, serviceAction }) {
   let content;
-  if (error) content = <section className="card"><p className="alert">加载失败：{error}</p></section>;
-  else if (!data) content = <section className="card"><p className="muted">正在加载总览数据。</p></section>;
+  if (error) content = <div className="rounded-xl border bg-card p-6 text-sm text-destructive shadow-sm">加载失败：{error}</div>;
+  else if (!data) content = <div className="rounded-xl border bg-card p-6 text-sm text-muted-foreground shadow-sm">正在加载总览数据。</div>;
   else {
     content = (
       <Routes>

@@ -1,15 +1,23 @@
-import { useEffect } from "react";
+import { Badge as UiBadge } from "../ui/badge.jsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog.jsx";
+import { cn } from "../lib/utils.js";
 
 export function Badge({ active, children }) {
-  return <span className={`badge ${active ? "ok" : "down"}`}>{children}</span>;
+  return <UiBadge variant={active ? "success" : "secondary"}>{children}</UiBadge>;
 }
 
 export function PageHead({ meta, action }) {
   return (
-    <div className="page-head">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <p className="eyebrow">{meta.eyebrow}</p>
-        <h1>{meta.title}</h1>
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{meta.eyebrow}</p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">{meta.title}</h1>
       </div>
       {action}
     </div>
@@ -18,44 +26,32 @@ export function PageHead({ meta, action }) {
 
 export function Metric({ label, value, alert }) {
   return (
-    <div className="metric-card">
-      <div className="muted">{label}</div>
-      <strong className={alert ? "alert" : ""}>{value}</strong>
+    <div className="rounded-xl border bg-card p-5 shadow-sm">
+      <div className="text-sm text-muted-foreground">{label}</div>
+      <strong className={cn("mt-1 block text-2xl font-semibold tabular-nums", alert && "text-destructive")}>
+        {value}
+      </strong>
     </div>
   );
 }
 
-export function ModalFrame({ open, onCancel, eyebrow, title, titleId, children, footer }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") onCancel();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onCancel]);
-
-  if (!open) return null;
-
+// ModalFrame keeps its original API but renders a shadcn/Radix dialog.
+export function ModalFrame({ open, onCancel, eyebrow, title, children, footer }) {
   return (
-    <div className="modal-layer" role="presentation" onMouseDown={onCancel}>
-      <section
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="modal-head">
-          <div>
-            <p className="eyebrow">{eyebrow}</p>
-            <h3 id={titleId}>{title}</h3>
-          </div>
-          <button className="modal-close" aria-label="关闭" onClick={onCancel}>×</button>
-        </div>
-        <div className="modal-body form-grid">{children}</div>
-        <div className="modal-foot">{footer}</div>
-      </section>
-    </div>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onCancel();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{eyebrow}</p>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4">{children}</div>
+        <DialogFooter>{footer}</DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
