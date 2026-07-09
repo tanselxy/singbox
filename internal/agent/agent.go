@@ -34,9 +34,12 @@ type TrafficDelta struct {
 	Down int64 `json:"down"`
 }
 
-// ApplyRequest is the desired client set pushed to a node.
+// ApplyRequest is the desired client set pushed to a node. Force asks the node
+// to restart sing-box even if the config looks already applied — used when
+// traffic proves the node's running config is stale.
 type ApplyRequest struct {
 	Clients []model.Client `json:"clients"`
+	Force   bool           `json:"force,omitempty"`
 }
 
 // Client talks to one node's agent API.
@@ -65,9 +68,10 @@ func (c *Client) FetchServer(ctx context.Context) (model.Server, error) {
 	return srv, err
 }
 
-// Apply pushes the desired client set to the node.
-func (c *Client) Apply(ctx context.Context, clients []model.Client) error {
-	return c.do(ctx, http.MethodPost, PathApply, ApplyRequest{Clients: clients}, nil)
+// Apply pushes the desired client set to the node. force bypasses the node's
+// already-applied shortcut (see ApplyRequest.Force).
+func (c *Client) Apply(ctx context.Context, clients []model.Client, force bool) error {
+	return c.do(ctx, http.MethodPost, PathApply, ApplyRequest{Clients: clients, Force: force}, nil)
 }
 
 // Traffic returns per-user traffic deltas since the previous call (the node

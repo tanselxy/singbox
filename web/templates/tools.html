@@ -4,36 +4,39 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>节点转换 · Sing-Box 面板</title>
-  <link rel="stylesheet" href="{{.Prefix}}/static/style.css">
+  <link rel="stylesheet" href="{{.Prefix}}/static/dashboard.css">
 </head>
-<body data-prefix="{{.Prefix}}">
-  <header class="topbar">
-    <strong>Sing-Box 面板</strong>
-    <nav>
-      <a href="{{.Prefix}}/dashboard">控制台</a>
-      <a href="{{.Prefix}}/nodes">节点</a>
-      <a href="{{.Prefix}}/tools">节点转换</a>
-      <form method="post" action="{{.Prefix}}/logout" class="inline">
-        <button type="submit" class="link">退出</button>
+<body data-prefix="{{.Prefix}}" class="min-h-screen bg-background text-foreground antialiased">
+  <header class="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:px-6">
+    <strong class="text-sm font-semibold tracking-tight">Sing-Box 面板</strong>
+    <nav class="flex items-center gap-4 text-sm">
+      <a class="text-muted-foreground transition-colors hover:text-foreground" href="{{.Prefix}}/dashboard">控制台</a>
+      <a class="text-muted-foreground transition-colors hover:text-foreground" href="{{.Prefix}}/tools">节点转换</a>
+      <form method="post" action="{{.Prefix}}/logout">
+        <button type="submit" class="text-muted-foreground transition-colors hover:text-foreground cursor-pointer">退出</button>
       </form>
     </nav>
   </header>
 
-  <main>
-    <section class="card">
-      <h3>节点链接 → Clash 代理片段</h3>
-      <p class="muted">支持 vless（reality/tls）、vmess、trojan。粘贴单条链接后转换。</p>
-      <label>输入
-        <textarea id="input" rows="4" placeholder="vless://... 或 vmess://... 或 trojan://..."></textarea>
-      </label>
-      <div class="actions">
-        <button id="convert">转换 (Ctrl+Enter)</button>
-        <button id="copy-out">复制结果</button>
-        <button id="clear" class="warn">清空</button>
+  <main class="mx-auto w-full max-w-3xl p-4 md:p-6">
+    <section class="space-y-4 rounded-xl border bg-card p-6 shadow-sm">
+      <div>
+        <h3 class="text-base font-semibold">节点链接 → Clash 代理片段</h3>
+        <p class="mt-1 text-sm text-muted-foreground">支持 vless（reality/tls）、vmess、trojan。粘贴单条链接后转换。</p>
       </div>
-      <div id="message"></div>
-      <label>输出
-        <textarea id="output" rows="10" readonly></textarea>
+      <label class="flex flex-col gap-1.5 text-sm font-medium">输入
+        <textarea id="input" rows="4" placeholder="vless://... 或 vmess://... 或 trojan://..."
+          class="w-full rounded-md border bg-transparent px-3 py-2 font-mono text-sm shadow-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"></textarea>
+      </label>
+      <div class="flex flex-wrap gap-2">
+        <button id="convert" class="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 cursor-pointer">转换 (Ctrl+Enter)</button>
+        <button id="copy-out" class="inline-flex h-9 items-center rounded-md border px-4 text-sm hover:bg-accent cursor-pointer">复制结果</button>
+        <button id="clear" class="inline-flex h-9 items-center rounded-md border px-4 text-sm text-destructive hover:bg-accent cursor-pointer">清空</button>
+      </div>
+      <div id="message" class="text-sm"></div>
+      <label class="flex flex-col gap-1.5 text-sm font-medium">输出
+        <textarea id="output" rows="10" readonly
+          class="w-full rounded-md border bg-transparent px-3 py-2 font-mono text-sm shadow-xs"></textarea>
       </label>
     </section>
   </main>

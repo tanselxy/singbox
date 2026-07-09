@@ -66,7 +66,11 @@ func (s *Server) handleAgentApply(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := deploy.Apply(r.Context(), srv, req.Clients); err != nil {
+	applyFn := deploy.Apply
+	if req.Force {
+		applyFn = deploy.ForceApply
+	}
+	if err := applyFn(r.Context(), srv, req.Clients); err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}

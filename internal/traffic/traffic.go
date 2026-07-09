@@ -6,6 +6,7 @@ package traffic
 
 import (
 	"context"
+	"log"
 	"strings"
 	"time"
 
@@ -22,16 +23,23 @@ import (
 // so the caller can disable the client and regenerate the config.
 type QuotaEnforcer func(ctx context.Context, clientID int64) error
 
+// Reconciler re-applies the desired config so an earlier failed apply/push is
+// retried until it converges. force=true means the running service is provably
+// stale (a disabled/deleted client still produced traffic) and the apply must
+// bypass any already-applied shortcut.
+type Reconciler func(ctx context.Context, force bool) error
+
 // Poller periodically collects per-user traffic.
 type Poller struct {
-	db       *store.Store
-	interval time.Duration
-	enforce  QuotaEnforcer
+	db        *store.Store
+	interval  time.Duration
+	enforce   QuotaEnforcer
+	reconcile Reconciler
 }
 
 // NewPoller creates a traffic poller.
-func NewPoller(db *store.Store, interval time.Duration, enforce QuotaEnforcer) *Poller {
-	return &Poller{db: db, interval: interval, enforce: enforce}
+func NewPoller(db *store.Store, interval time.Duration, enforce QuotaEnforcer, reconcile Reconciler) *Poller {
+	return &Poller{db: db, interval: interval, enforce: enforce, reconcile: reconcile}
 }
 
 // Run polls until ctx is cancelled. It dials lazily each tick so it tolerates
@@ -61,20 +69,44 @@ func (p *Poller) pollOnce(ctx context.Context) error {
 	// Update per-user traffic from v2ray_api (best-effort: if sing-box is
 	// restarting or the API is briefly unavailable, we still run enforcement
 	// below so expiry is applied even without traffic).
+	//
+	// The generated config only lists enabled clients in the v2ray_api stats
+	// (and a restart resets all counters), so traffic reported for a disabled
+	// or deleted client proves sing-box is still running a stale config — an
+	// earlier apply must have failed. That is escalated to a forced reconcile.
+	stale := false
 	if deltas, err := QueryDeltas(ctx); err == nil {
-		byName := make(map[string]int64, len(clients))
+		byName := make(map[string]model.Client, len(clients))
 		for _, c := range clients {
-			byName[c.Name] = c.ID
+			byName[c.Name] = c
 		}
 		now := time.Now().Unix()
 		for name, d := range deltas {
-			if id, ok := byName[name]; ok && (d.up != 0 || d.down != 0) {
-				_ = p.db.AddTraffic(id, d.up, d.down, now)
+			if d.up == 0 && d.down == 0 {
+				continue
+			}
+			c, ok := byName[name]
+			if !ok || !c.Enabled {
+				stale = true
+			}
+			if ok {
+				_ = p.db.AddTraffic(c.ID, d.up, d.down, now)
 			}
 		}
 	}
 
 	p.enforce_(ctx, clients)
+
+	// Re-assert the desired config every tick: a no-op when everything is in
+	// sync, otherwise it retries whatever failed (local apply or node push).
+	if p.reconcile != nil {
+		if stale {
+			log.Printf("traffic: 检测到已停用/已删除客户仍有流量，强制重载配置")
+		}
+		if err := p.reconcile(ctx, stale); err != nil {
+			log.Printf("traffic: 配置对账失败: %v", err)
+		}
+	}
 	return nil
 }
 
@@ -89,7 +121,10 @@ func (p *Poller) enforce_(ctx context.Context, clients []model.Client) {
 		overQuota := c.QuotaBytes > 0 && p.usage(c.ID) >= c.QuotaBytes
 		expired := c.ExpiresAt > 0 && now >= c.ExpiresAt
 		if overQuota || expired {
-			_ = p.enforce(ctx, c.ID)
+			if err := p.enforce(ctx, c.ID); err != nil {
+				// The reconcile pass retries the config apply next tick.
+				log.Printf("traffic: 停用客户 %s 失败: %v", c.Name, err)
+			}
 		}
 	}
 }

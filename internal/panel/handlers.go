@@ -41,14 +41,17 @@ type clientRow struct {
 }
 
 type dashboardData struct {
-	Prefix   string
-	ServerIP string
-	Active   bool
-	Clients  []clientRow
-	System   systemStatus
-	Version  string
-	View     string
-	Summary  dashboardSummary
+	Prefix       string
+	ServerIP     string
+	Active       bool
+	Clients      []clientRow
+	System       systemStatus
+	Version      string
+	View         string
+	Summary      dashboardSummary
+	SelfAgentURL string
+	AccessCode   string
+	Managed      bool
 }
 
 type dashboardSummary struct {
@@ -193,6 +196,7 @@ func (s *Server) dashboardData(ctx context.Context) (dashboardData, error) {
 			Expired:       c.ExpiresAt > 0 && now >= c.ExpiresAt,
 		})
 	}
+	selfURL := selfAgentURL(srv, s.cfg.Port)
 	return dashboardData{
 		Prefix:   s.prefix,
 		ServerIP: srv.ServerIP,
@@ -203,8 +207,11 @@ func (s *Server) dashboardData(ctx context.Context) (dashboardData, error) {
 			Fail2ban: system.Fail2banActive(ctx),
 			SSHPort:  system.CurrentSSHPort(),
 		},
-		Version: Version,
-		Summary: summary,
+		Version:      Version,
+		Summary:      summary,
+		SelfAgentURL: selfURL,
+		AccessCode:   encodeAccessCode(selfURL, s.cfg.AgentToken),
+		Managed:      s.cfg.Managed,
 	}, nil
 }
 
@@ -565,6 +572,16 @@ func (s *Server) handleServiceAction(w http.ResponseWriter, r *http.Request) {
 // applyConfig regenerates the sing-box config from enabled clients and restarts
 // the service, serialized against concurrent edits.
 func (s *Server) applyConfig(ctx context.Context) error {
+	return s.reconcileConfig(ctx, false)
+}
+
+// reconcileConfig re-asserts the desired config: it applies locally (a no-op
+// when already applied) and pushes to every node whose last successful push
+// is out of date. The traffic poller calls it every tick, which is what
+// retries a failed apply or node push until the fleet converges. force
+// bypasses the already-applied shortcut when the running service is provably
+// stale.
+func (s *Server) reconcileConfig(ctx context.Context, force bool) error {
 	s.applyMu.Lock()
 	defer s.applyMu.Unlock()
 
@@ -576,12 +593,16 @@ func (s *Server) applyConfig(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := deploy.Apply(ctx, srv, clients); err != nil {
-		return err
+	localErr := error(nil)
+	if force {
+		localErr = deploy.ForceApply(ctx, srv, clients)
+	} else {
+		localErr = deploy.Apply(ctx, srv, clients)
 	}
-	// Fan the same client set out to all registered nodes (best-effort).
-	s.pushToNodes(ctx)
-	return nil
+	// Fan the client set out to out-of-date nodes even if the local apply
+	// failed — nodes are independent of the local service.
+	s.pushToNodes(ctx, clients)
+	return localErr
 }
 
 // ---- helpers ----

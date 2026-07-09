@@ -4,50 +4,49 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{.Client.Name}} · Sing-Box 面板</title>
-  <link rel="stylesheet" href="{{.Prefix}}/static/style.css">
+  <link rel="stylesheet" href="{{.Prefix}}/static/dashboard.css">
 </head>
-<body data-prefix="{{.Prefix}}">
-  <header class="topbar">
-    <strong>Sing-Box 面板</strong>
-    <nav>
-      <a href="{{.Prefix}}/dashboard">← 返回控制台</a>
-      <a href="{{.Prefix}}/nodes">节点</a>
-      <a href="{{.Prefix}}/tools">节点转换</a>
-      <form method="post" action="{{.Prefix}}/logout" class="inline">
-        <button type="submit" class="link">退出</button>
+<body data-prefix="{{.Prefix}}" class="min-h-screen bg-background text-foreground antialiased">
+  <header class="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:px-6">
+    <strong class="text-sm font-semibold tracking-tight">Sing-Box 面板</strong>
+    <nav class="flex items-center gap-4 text-sm">
+      <a class="text-muted-foreground transition-colors hover:text-foreground" href="{{.Prefix}}/dashboard">← 返回控制台</a>
+      <a class="text-muted-foreground transition-colors hover:text-foreground" href="{{.Prefix}}/tools">节点转换</a>
+      <form method="post" action="{{.Prefix}}/logout">
+        <button type="submit" class="text-muted-foreground transition-colors hover:text-foreground cursor-pointer">退出</button>
       </form>
     </nav>
   </header>
 
-  <main>
-    <section class="card">
-      <div class="status-row">
-        <div><div class="muted">客户</div><div class="mono">{{.Client.Name}}</div></div>
-        <div><div class="muted">已用流量</div><div>{{.Used}}</div></div>
-        <div><div class="muted">配额</div><div>{{.Quota}}</div></div>
-        <div><div class="muted">设备数</div><div>{{.Devices}}</div></div>
-        <div><div class="muted">到期</div><div>{{.Expiry}}</div></div>
+  <main class="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-6">
+    <section class="rounded-xl border bg-card p-6 shadow-sm">
+      <div class="flex flex-wrap gap-x-10 gap-y-4">
+        <div><div class="text-sm text-muted-foreground">客户</div><div class="mt-1 font-mono">{{.Client.Name}}</div></div>
+        <div><div class="text-sm text-muted-foreground">已用流量</div><div class="mt-1">{{.Used}}</div></div>
+        <div><div class="text-sm text-muted-foreground">配额</div><div class="mt-1">{{.Quota}}</div></div>
+        <div><div class="text-sm text-muted-foreground">设备数</div><div class="mt-1">{{.Devices}}</div></div>
+        <div><div class="text-sm text-muted-foreground">到期</div><div class="mt-1">{{.Expiry}}</div></div>
       </div>
-      <div class="node-head" style="margin-top:16px">
-        <h3>订阅链接</h3>
-        <button class="copy" data-url="{{.SubURL}}">复制</button>
+      <div class="mt-6 flex items-center justify-between">
+        <h3 class="text-base font-semibold">订阅链接</h3>
+        <button class="copy inline-flex h-8 items-center rounded-md border px-3 text-sm hover:bg-accent cursor-pointer" data-url="{{.SubURL}}">复制</button>
       </div>
-      <textarea class="link" readonly rows="2">{{.SubURL}}</textarea>
-      <p class="muted">导入到 v2rayN / Shadowrocket / sing-box 等客户端（base64 订阅）。追加 <span class="mono">?target=raw</span> 可得明文链接列表。</p>
+      <textarea class="mt-2 w-full rounded-md border bg-transparent px-3 py-2 font-mono text-xs" readonly rows="2">{{.SubURL}}</textarea>
+      <p class="mt-2 text-sm text-muted-foreground">导入到 v2rayN / Shadowrocket / sing-box 等客户端（base64 订阅）。追加 <span class="font-mono">?target=raw</span> 可得明文链接列表。</p>
     </section>
 
-    <section class="grid">
+    <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {{range .Nodes}}
-      <div class="card node">
-        <div class="node-head">
-          <h3>{{.Name}}</h3>
-          <button class="copy" data-url="{{.URL}}">复制</button>
+      <div class="rounded-xl border bg-card p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold">{{.Name}}</h3>
+          <button class="copy inline-flex h-7 items-center rounded-md border px-2.5 text-xs hover:bg-accent cursor-pointer" data-url="{{.URL}}">复制</button>
         </div>
-        <img class="qr" src="{{.QRPath}}" alt="{{.Name}} 二维码" loading="lazy">
-        <textarea class="link" readonly rows="3">{{.URL}}</textarea>
+        <img class="mx-auto my-3 size-40 rounded-lg bg-white p-2" src="{{.QRPath}}" alt="{{.Name}} 二维码" loading="lazy">
+        <textarea class="w-full rounded-md border bg-transparent px-3 py-2 font-mono text-xs" readonly rows="3">{{.URL}}</textarea>
       </div>
       {{else}}
-      <p class="muted">没有可展示的节点。</p>
+      <p class="text-sm text-muted-foreground">没有可展示的节点。</p>
       {{end}}
     </section>
   </main>

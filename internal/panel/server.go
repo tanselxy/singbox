@@ -36,6 +36,13 @@ type Server struct {
 	// managed by a master (see handleAgentApply).
 	pollerCancel context.CancelFunc
 
+	// pushed records, per node ID, the hash of the client set last pushed
+	// successfully, so pushToNodes only contacts nodes that are out of date and
+	// failed pushes are retried by the poller's reconcile pass until they
+	// converge. Guarded by pushedMu.
+	pushedMu sync.Mutex
+	pushed   map[int64][32]byte
+
 	notifyMu   sync.Mutex
 	notifyLast map[string]time.Time
 }
@@ -54,7 +61,8 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open client store: %w", err)
 	}
-	return &Server{cfg: cfg, auth: a, tmpl: tmpl, prefix: "/" + cfg.PathPrefix, db: db, notifyLast: map[string]time.Time{}}, nil
+	return &Server{cfg: cfg, auth: a, tmpl: tmpl, prefix: "/" + cfg.PathPrefix, db: db,
+		notifyLast: map[string]time.Time{}, pushed: map[int64][32]byte{}}, nil
 }
 
 // Handler returns the routed, security-wrapped HTTP handler.
@@ -125,7 +133,9 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 	// Start the local per-user traffic poller unless this panel is managed by a
 	// master (then the master reads the counters; a local poller would compete).
-	// enforce disables a client on quota/expiry and regenerates config.
+	// enforce disables a client on quota/expiry and regenerates config;
+	// reconcile re-asserts the desired config each tick so a failed apply or
+	// node push is retried until it converges.
 	enforce := func(ctx context.Context, clientID int64) error {
 		if err := s.db.SetEnabled(clientID, false); err != nil {
 			return err
@@ -137,7 +147,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		s.applyMu.Lock()
 		s.pollerCancel = cancel
 		s.applyMu.Unlock()
-		go traffic.NewPoller(s.db, trafficInterval, enforce).Run(pollerCtx)
+		go traffic.NewPoller(s.db, trafficInterval, enforce, s.reconcileConfig).Run(pollerCtx)
 	}
 
 	// Master side: poll registered remote nodes for traffic + accumulate.

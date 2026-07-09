@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Badge, ModalFrame, PageHead } from "../components.jsx";
 import { VIEW_META } from "../constants.js";
 import { Button } from "../../ui/button.jsx";
-import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card.jsx";
+import { Card, CardContent } from "../../ui/card.jsx";
 import { Input, Textarea } from "../../ui/input.jsx";
 import { Label } from "../../ui/label.jsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../ui/table.jsx";
@@ -17,7 +17,6 @@ export function Monitoring({ prefix }) {
   const [nodeForm, setNodeForm] = useState({ code: "", name: "" });
   const [history, setHistory] = useState({});
   const [loading, setLoading] = useState(true);
-  const [updatedAt, setUpdatedAt] = useState("");
 
   async function load() {
     try {
@@ -34,10 +33,6 @@ export function Monitoring({ prefix }) {
             const items = next[node.ID] ? [...next[node.ID]] : [];
             items.push({
               t: sampledAt,
-              cpu: node.CPUPercent,
-              mem: node.MemPercent,
-              disk: node.DiskPercent,
-              load1: node.Load1,
               netRx: node.NetRxBytes,
               netTx: node.NetTxBytes,
             });
@@ -45,7 +40,6 @@ export function Monitoring({ prefix }) {
           });
           return next;
         });
-        setUpdatedAt(new Date(sampledAt).toLocaleTimeString());
       }
     } catch (err) {
       console.error(err);
@@ -144,11 +138,7 @@ export function Monitoring({ prefix }) {
         }
       />
       <Card>
-        <CardHeader>
-          <CardTitle>被控端资源</CardTitle>
-          <span className="text-sm text-muted-foreground">{updatedAt ? `更新于 ${updatedAt}` : "等待采集"}</span>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {mode === "charts" ? (
             <MonitoringCharts nodes={nodes} history={history} loading={loading} onEdit={openEditNode} onDelete={deleteNode} />
           ) : (
@@ -229,7 +219,7 @@ function MonitoringCharts({ nodes, history, loading, onEdit, onDelete }) {
     return <div className="py-10 text-center text-sm text-muted-foreground">{loading ? "正在读取节点指标。" : "还没有受控节点。"}</div>;
   }
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div className="grid items-start gap-4 md:grid-cols-[repeat(auto-fill,minmax(360px,560px))]">
       {nodes.map((node) => (
         <NodeMetricCard key={node.ID} node={node} history={history[node.ID] || []} onEdit={onEdit} onDelete={onDelete} />
       ))}
@@ -240,7 +230,7 @@ function MonitoringCharts({ nodes, history, loading, onEdit, onDelete }) {
 function NodeMetricCard({ node, history, onEdit, onDelete }) {
   const rates = networkRates(history);
   return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm">
+    <div className="w-full max-w-xl rounded-xl border bg-card p-4 shadow-sm">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h4 className="truncate font-medium">{node.Name}</h4>
@@ -255,10 +245,10 @@ function NodeMetricCard({ node, history, onEdit, onDelete }) {
         </div>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <MetricBlock label="CPU" sub={`${node.CPUCores || "-"} 核`} value={`${node.CPUPercent.toFixed(1)}%`} percent={node.CPUPercent} samples={history.map((i) => i.cpu)} tone="text-chart-1" />
-        <MetricBlock label="内存" value={node.Mem || "-"} percent={node.MemPercent} samples={history.map((i) => i.mem)} tone="text-chart-2" />
-        <MetricBlock label="硬盘" value={node.Disk || "-"} percent={node.DiskPercent} samples={history.map((i) => i.disk)} tone="text-chart-3" />
-        <MetricBlock label="负载" sub={`5m ${formatLoad(node.Load5)} · 15m ${formatLoad(node.Load15)}`} value={formatLoad(node.Load1)} percent={loadPercent(node)} samples={history.map((i) => loadPercent({ CPUCores: node.CPUCores, Load1: i.load1 }))} tone="text-chart-4" />
+        <MetricBlock label="CPU" sub={`${node.CPUCores || "-"} 核`} value={`${node.CPUPercent.toFixed(1)}%`} percent={node.CPUPercent} tone="text-chart-1" />
+        <MetricBlock label="内存" value={node.Mem || "-"} percent={node.MemPercent} tone="text-chart-2" />
+        <MetricBlock label="硬盘" value={node.Disk || "-"} percent={node.DiskPercent} tone="text-chart-3" />
+        <MetricBlock label="负载" sub={`5m ${formatLoad(node.Load5)} · 15m ${formatLoad(node.Load15)}`} value={formatLoad(node.Load1)} percent={loadPercent(node)} tone="text-chart-4" />
       </div>
       <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2 lg:grid-cols-4">
         <MiniMetric label="上行" value={rates.upRate} />
@@ -270,7 +260,7 @@ function NodeMetricCard({ node, history, onEdit, onDelete }) {
   );
 }
 
-function MetricBlock({ label, sub, value, percent, samples, tone }) {
+function MetricBlock({ label, sub, value, percent, tone }) {
   return (
     <div className={tone}>
       <div className="mb-1 flex items-start justify-between gap-3 text-sm">
@@ -283,7 +273,6 @@ function MetricBlock({ label, sub, value, percent, samples, tone }) {
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <span className="block h-full rounded-full bg-current" style={{ width: `${clampPercent(percent)}%` }} />
       </div>
-      <Sparkline samples={samples} />
     </div>
   );
 }
@@ -294,23 +283,6 @@ function MiniMetric({ label, value }) {
       <span className="text-xs text-muted-foreground">{label}</span>
       <strong className="mt-1 block text-sm tabular-nums">{value}</strong>
     </div>
-  );
-}
-
-function Sparkline({ samples }) {
-  const values = samples.length > 1 ? samples : [0, ...samples];
-  const points = values
-    .map((value, index) => {
-      const x = values.length === 1 ? 0 : (index / (values.length - 1)) * 100;
-      const y = 42 - (clampPercent(value) / 100) * 38;
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(" ");
-  return (
-    <svg className="mt-1.5 h-8 w-full text-current" viewBox="0 0 100 44" preserveAspectRatio="none" role="img" aria-label="最近采样趋势">
-      <polygon points={`0,44 ${points} 100,44`} fill="currentColor" fillOpacity="0.12" />
-      <polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-    </svg>
   );
 }
 

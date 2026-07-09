@@ -98,9 +98,12 @@
 
   function message(text, kind) {
     const m = document.getElementById("message");
-    m.className = kind;
+    m.className = "text-sm " + (kind === "alert" ? "text-destructive" : "text-success");
     m.textContent = text;
-    setTimeout(() => (m.textContent = ""), 3000);
+    setTimeout(() => {
+      m.textContent = "";
+      m.className = "text-sm";
+    }, 3000);
   }
 
   function convert() {

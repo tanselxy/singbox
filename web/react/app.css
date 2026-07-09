@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @source "./**/*.{js,jsx}";
-@source "../templates/dashboard.html";
+@source "../templates/*.html";
 
 @custom-variant dark (&:is(.dark *));
 

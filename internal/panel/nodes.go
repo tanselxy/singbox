@@ -2,9 +2,11 @@ package panel
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,6 +25,14 @@ func encodeAccessCode(address, token string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(address + "\n" + token))
 }
 
+func selfAgentURL(srv model.Server, port int) string {
+	host := srv.ServerIP
+	if srv.IPv6Only {
+		host = "[" + srv.ServerIP + "]"
+	}
+	return fmt.Sprintf("https://%s:%d", host, port)
+}
+
 // decodeAccessCode unpacks an access code into address and token.
 func decodeAccessCode(code string) (address, token string, err error) {
 	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(code))
@@ -39,29 +49,51 @@ func decodeAccessCode(code string) (address, token string, err error) {
 // nodePollInterval is how often the master polls remote nodes for traffic.
 const nodePollInterval = 30 * time.Second
 
-// pushToNodes applies the current active client set to every registered node.
-// Best-effort: a node that is down is skipped and retried next change/poll.
-func (s *Server) pushToNodes(ctx context.Context) {
+// clientSetHash fingerprints a client set for the per-node push ledger.
+func clientSetHash(clients []model.Client) [32]byte {
+	b, _ := json.Marshal(clients)
+	return sha256.Sum256(b)
+}
+
+// pushToNodes applies the given active client set to every registered node
+// whose last successful push differs from it. A failed push leaves the node's
+// ledger entry stale, so the poller's reconcile pass retries it every tick
+// until the node converges.
+func (s *Server) pushToNodes(ctx context.Context, clients []model.Client) {
 	nodes, err := s.db.ListNodes()
 	if err != nil || len(nodes) == 0 {
 		return
 	}
-	clients, err := s.db.ActiveClients(time.Now().Unix())
-	if err != nil {
-		return
-	}
+	want := clientSetHash(clients)
 	var wg sync.WaitGroup
 	for _, n := range nodes {
+		s.pushedMu.Lock()
+		current := s.pushed[n.ID] == want
+		s.pushedMu.Unlock()
+		if current {
+			continue
+		}
 		wg.Add(1)
 		go func(n model.Node) {
 			defer wg.Done()
-			c := agent.New(n.Address, n.Token)
-			cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-			defer cancel()
-			_ = c.Apply(cctx, clients)
+			s.pushNode(ctx, n, clients, want, false)
 		}(n)
 	}
 	wg.Wait()
+}
+
+// pushNode pushes one client set to one node, recording success in the ledger.
+func (s *Server) pushNode(ctx context.Context, n model.Node, clients []model.Client, want [32]byte, force bool) {
+	c := agent.New(n.Address, n.Token)
+	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	if err := c.Apply(cctx, clients, force); err != nil {
+		log.Printf("panel: 下发配置到节点 %s 失败（将自动重试）: %v", n.Name, err)
+		return
+	}
+	s.pushedMu.Lock()
+	s.pushed[n.ID] = want
+	s.pushedMu.Unlock()
 }
 
 // runNodePoller periodically collects per-user traffic from each node and
@@ -89,12 +121,14 @@ func (s *Server) pollNodesOnce(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	idByName := make(map[string]int64, len(clients))
+	byName := make(map[string]model.Client, len(clients))
 	for _, c := range clients {
-		idByName[c.Name] = c.ID
+		byName[c.Name] = c
 	}
 
 	now := time.Now().Unix()
+	var active []model.Client
+	var want [32]byte
 	for _, n := range nodes {
 		c := agent.New(n.Address, n.Token)
 		cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -103,10 +137,31 @@ func (s *Server) pollNodesOnce(ctx context.Context) {
 		if err != nil {
 			continue
 		}
+		// A node only tracks stats for the clients in its pushed config, so
+		// traffic for a disabled or deleted client proves the node is still
+		// running a stale config: force a fresh push to it.
+		stale := false
 		for name, d := range deltas {
-			if id, ok := idByName[name]; ok && (d.Up != 0 || d.Down != 0) {
-				_ = s.db.AddTraffic(id, d.Up, d.Down, now)
+			if d.Up == 0 && d.Down == 0 {
+				continue
 			}
+			cl, ok := byName[name]
+			if !ok || !cl.Enabled {
+				stale = true
+			}
+			if ok {
+				_ = s.db.AddTraffic(cl.ID, d.Up, d.Down, now)
+			}
+		}
+		if stale {
+			if active == nil {
+				if active, err = s.db.ActiveClients(now); err != nil {
+					continue
+				}
+				want = clientSetHash(active)
+			}
+			log.Printf("panel: 节点 %s 仍在服务已停用客户，强制重新下发配置", n.Name)
+			s.pushNode(ctx, n, active, want, true)
 		}
 	}
 }
@@ -144,11 +199,7 @@ func (s *Server) handleNodesPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	srv, _ := state.LoadServer()
-	host := srv.ServerIP
-	if srv.IPv6Only {
-		host = "[" + srv.ServerIP + "]"
-	}
-	selfURL := fmt.Sprintf("https://%s:%d", host, s.cfg.Port)
+	selfURL := selfAgentURL(srv, s.cfg.Port)
 	s.render(w, "nodes.html", map[string]any{
 		"Prefix":       s.prefix,
 		"Nodes":        rows,
@@ -258,14 +309,18 @@ func (s *Server) handleNodeCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Push current clients to the new node immediately.
+	// Push current clients to the new node immediately. On failure the ledger
+	// stays empty for this node, so the reconcile pass retries automatically.
 	clients, _ := s.db.ActiveClients(time.Now().Unix())
 	pctx, pcancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer pcancel()
-	if err := agent.New(node.Address, node.Token).Apply(pctx, clients); err != nil {
-		writeJSON(w, map[string]any{"ok": true, "warn": "已添加，但首次下发失败: " + err.Error()})
+	if err := agent.New(node.Address, node.Token).Apply(pctx, clients, false); err != nil {
+		writeJSON(w, map[string]any{"ok": true, "warn": "已添加，但首次下发失败（将自动重试）: " + err.Error()})
 		return
 	}
+	s.pushedMu.Lock()
+	s.pushed[node.ID] = clientSetHash(clients)
+	s.pushedMu.Unlock()
 	writeJSON(w, map[string]any{"ok": true})
 }
 
@@ -279,6 +334,9 @@ func (s *Server) handleNodeDelete(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
+	s.pushedMu.Lock()
+	delete(s.pushed, id)
+	s.pushedMu.Unlock()
 	writeJSON(w, map[string]any{"ok": true})
 }
 

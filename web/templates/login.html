@@ -4,17 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>登录 · Sing-Box 面板</title>
-  <link rel="stylesheet" href="{{.Prefix}}/static/style.css">
+  <link rel="stylesheet" href="{{.Prefix}}/static/dashboard.css">
 </head>
-<body class="center">
-  <form class="card login" method="post" action="{{.Prefix}}/login">
-    <h1>Sing-Box 面板</h1>
-    {{if eq .Error "invalid"}}<p class="alert">密码错误</p>{{end}}
-    {{if eq .Error "locked"}}<p class="alert">尝试过于频繁，请稍后再试</p>{{end}}
-    <label>密码
-      <input type="password" name="password" autofocus autocomplete="current-password" required>
+<body class="grid min-h-screen place-items-center bg-background p-4 text-foreground antialiased">
+  <form class="w-full max-w-sm space-y-5 rounded-xl border bg-card p-6 shadow-sm" method="post" action="{{.Prefix}}/login">
+    <div>
+      <h1 class="text-lg font-semibold tracking-tight">Sing-Box 面板</h1>
+      <p class="mt-1 text-sm text-muted-foreground">请输入密码登录</p>
+    </div>
+    {{if eq .Error "invalid"}}<p class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">密码错误</p>{{end}}
+    {{if eq .Error "locked"}}<p class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">尝试过于频繁，请稍后再试</p>{{end}}
+    <label class="flex flex-col gap-1.5 text-sm font-medium">
+      密码
+      <input
+        type="password" name="password" autofocus autocomplete="current-password" required
+        class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
     </label>
-    <button type="submit">登录</button>
+    <button type="submit"
+      class="inline-flex h-9 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs transition-colors hover:bg-primary/90 cursor-pointer">
+      登录
+    </button>
   </form>
 </body>
 </html>
