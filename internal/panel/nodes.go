@@ -2,6 +2,7 @@ package panel
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,6 +16,25 @@ import (
 	"github.com/tanselxy/singbox/internal/model"
 	"github.com/tanselxy/singbox/internal/state"
 )
+
+// encodeAccessCode packs a node's agent address and token into one copy-paste
+// string, so registering a node needs a single copy instead of two.
+func encodeAccessCode(address, token string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(address + "\n" + token))
+}
+
+// decodeAccessCode unpacks an access code into address and token.
+func decodeAccessCode(code string) (address, token string, err error) {
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(code))
+	if err != nil {
+		return "", "", fmt.Errorf("接入码格式错误")
+	}
+	address, token, ok := strings.Cut(string(raw), "\n")
+	if !ok || address == "" || token == "" {
+		return "", "", fmt.Errorf("接入码内容不完整")
+	}
+	return address, token, nil
+}
 
 // nodePollInterval is how often the master polls remote nodes for traffic.
 const nodePollInterval = 30 * time.Second
@@ -136,11 +156,13 @@ func (s *Server) handleNodesPage(w http.ResponseWriter, r *http.Request) {
 	if srv.IPv6Only {
 		host = "[" + srv.ServerIP + "]"
 	}
+	selfURL := fmt.Sprintf("https://%s:%d", host, s.cfg.Port)
 	s.render(w, "nodes.html", map[string]any{
 		"Prefix":       s.prefix,
 		"Nodes":        rows,
-		"SelfAgentURL": fmt.Sprintf("https://%s:%d", host, s.cfg.Port),
+		"SelfAgentURL": selfURL,
 		"SelfToken":    s.cfg.AgentToken,
+		"AccessCode":   encodeAccessCode(selfURL, s.cfg.AgentToken),
 		"Managed":      s.cfg.Managed,
 	})
 }
@@ -151,10 +173,21 @@ func (s *Server) handleNodeCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(r.PostFormValue("name"))
-	address := strings.TrimRight(strings.TrimSpace(r.PostFormValue("address")), "/")
-	token := strings.TrimSpace(r.PostFormValue("token"))
-	if name == "" || address == "" || token == "" {
-		writeJSON(w, map[string]any{"ok": false, "error": "名称/地址/令牌都不能为空"})
+
+	// Prefer a single access code; fall back to separate address/token fields.
+	var address, token string
+	if code := strings.TrimSpace(r.PostFormValue("code")); code != "" {
+		var err error
+		if address, token, err = decodeAccessCode(code); err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+	} else {
+		address = strings.TrimRight(strings.TrimSpace(r.PostFormValue("address")), "/")
+		token = strings.TrimSpace(r.PostFormValue("token"))
+	}
+	if address == "" || token == "" {
+		writeJSON(w, map[string]any{"ok": false, "error": "请填写接入码"})
 		return
 	}
 
@@ -166,6 +199,10 @@ func (s *Server) handleNodeCreate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": "连接节点失败: " + err.Error()})
 		return
+	}
+	// Auto-name from the node's IP when no name is given.
+	if name == "" {
+		name = srv.ServerIP
 	}
 	serverJSON, _ := json.Marshal(srv)
 
@@ -202,18 +239,24 @@ func (s *Server) handleNodeDelete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true})
 }
 
-// nodeServers returns the cached model.Server of every registered node, for
-// aggregating subscription links.
-func (s *Server) nodeServers() []model.Server {
+// namedServer is a node's cached server settings plus its display name.
+type namedServer struct {
+	Name   string
+	Server model.Server
+}
+
+// nodeServers returns the cached server of every registered node, for
+// aggregating subscription links, each labelled with the node's name.
+func (s *Server) nodeServers() []namedServer {
 	nodes, err := s.db.ListNodes()
 	if err != nil {
 		return nil
 	}
-	out := make([]model.Server, 0, len(nodes))
+	out := make([]namedServer, 0, len(nodes))
 	for _, n := range nodes {
 		var srv model.Server
 		if json.Unmarshal([]byte(n.ServerJSON), &srv) == nil && srv.ServerIP != "" {
-			out = append(out, srv)
+			out = append(out, namedServer{Name: n.Name, Server: srv})
 		}
 	}
 	return out

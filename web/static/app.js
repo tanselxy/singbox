@@ -140,16 +140,15 @@
     addNodeBtn.addEventListener("click", () => (nodeForm.hidden = !nodeForm.hidden));
     document.getElementById("cancel-node").addEventListener("click", () => (nodeForm.hidden = true));
     document.getElementById("create-node").addEventListener("click", async (e) => {
+      const code = document.getElementById("node-code").value.trim();
       const name = document.getElementById("node-name").value.trim();
-      const address = document.getElementById("node-address").value.trim();
-      const token = document.getElementById("node-token").value.trim();
-      if (!name || !address || !token) {
-        alert("请填写名称、地址和令牌");
+      if (!code) {
+        alert("请粘贴节点的接入码");
         return;
       }
       e.target.disabled = true;
       try {
-        const body = new URLSearchParams({ name, address, token });
+        const body = new URLSearchParams({ code, name });
         const res = await fetch(prefix + "/api/nodes", { method: "POST", body });
         const data = await res.json();
         if (data.ok) {
@@ -185,6 +184,54 @@
       }
     });
   });
+
+  // Version check + in-panel upgrade.
+  const checkBtn = document.getElementById("check-update");
+  const upgradeBtn = document.getElementById("do-upgrade");
+  if (checkBtn) {
+    checkBtn.addEventListener("click", async () => {
+      checkBtn.disabled = true;
+      checkBtn.textContent = "检查中…";
+      try {
+        const res = await fetch(prefix + "/api/version");
+        const d = await res.json();
+        const latestEl = document.getElementById("ver-latest");
+        if (d.upgradable) {
+          latestEl.textContent = "有新版本 " + d.latest;
+          upgradeBtn.hidden = false;
+          upgradeBtn.textContent = "升级到 " + d.latest;
+        } else {
+          latestEl.textContent = d.latest ? "已是最新（" + d.latest + "）" : "无法获取最新版本";
+        }
+      } catch (e) {
+        alert("检查失败: " + e.message);
+      } finally {
+        checkBtn.disabled = false;
+        checkBtn.textContent = "检查更新";
+      }
+    });
+  }
+  if (upgradeBtn) {
+    upgradeBtn.addEventListener("click", async () => {
+      if (!confirm("确认升级？升级期间面板会短暂重启，请稍候刷新页面。")) return;
+      upgradeBtn.disabled = true;
+      upgradeBtn.textContent = "升级中…";
+      try {
+        const res = await fetch(prefix + "/api/upgrade", { method: "POST" });
+        const d = await res.json();
+        if (d.ok) {
+          alert("已下载新版本，面板正在重启，约 10 秒后请刷新页面。");
+        } else {
+          alert("升级失败: " + (d.error || ""));
+          upgradeBtn.disabled = false;
+          upgradeBtn.textContent = "重试升级";
+        }
+      } catch (e) {
+        // The panel may restart before responding; treat as in-progress.
+        alert("面板正在重启，约 10 秒后请刷新页面。");
+      }
+    });
+  }
 
   // Load recent service logs.
   const loadBtn = document.getElementById("load-logs");

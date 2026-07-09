@@ -85,7 +85,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		res.Client, res.Links = client, protocol.ClientLinks(srv, client)
+		res.Client, res.Links = client, protocol.ClientLinks(srv, client, "")
 		res.ConfigPath, err = writeDryRun(opts.OutputDir, srv, []model.Client{client})
 		return res, err
 	}
@@ -95,7 +95,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, err
 	}
 	res.Client = client
-	res.Links = protocol.ClientLinks(srv, client)
+	res.Links = protocol.ClientLinks(srv, client, "")
 	res.ConfigPath = singbox.ConfigPath
 	return res, nil
 }

@@ -49,7 +49,7 @@ func TestLinkPortsMatchInboundPorts(t *testing.T) {
 	}
 
 	links := map[model.Kind]string{}
-	for _, l := range ClientLinks(srv, cs[0]) {
+	for _, l := range ClientLinks(srv, cs[0], "") {
 		links[l.Kind] = l.URL
 	}
 
@@ -81,7 +81,7 @@ func TestClientLinksCarryOwnCredentials(t *testing.T) {
 	cs := clients()
 
 	aliceReality := ""
-	for _, l := range ClientLinks(srv, cs[0]) {
+	for _, l := range ClientLinks(srv, cs[0], "") {
 		if l.Kind == model.KindReality {
 			aliceReality = l.URL
 		}
@@ -98,7 +98,7 @@ func TestShadowTLSLinkUsesTwoLayerKey(t *testing.T) {
 	srv := sampleServer()
 	c := clients()[0]
 	var stls string
-	for _, l := range ClientLinks(srv, c) {
+	for _, l := range ClientLinks(srv, c, "") {
 		if l.Kind == model.KindShadowTLS {
 			stls = l.URL
 		}
@@ -119,7 +119,7 @@ func TestIPv6OnlyExposesOnlyCDN(t *testing.T) {
 	if len(ins) != 1 || ins[0].Tag != "vless-cdn" {
 		t.Fatalf("ipv6-only should expose exactly the vless-cdn inbound, got %d", len(ins))
 	}
-	links := ClientLinks(srv, cs[0])
+	links := ClientLinks(srv, cs[0], "")
 	if len(links) != 1 || links[0].Kind != model.KindVLESSCDN {
 		t.Fatalf("ipv6-only should yield exactly the CDN link, got %d", len(links))
 	}

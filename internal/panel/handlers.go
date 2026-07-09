@@ -42,6 +42,7 @@ type dashboardData struct {
 	Active   bool
 	Clients  []clientRow
 	System   systemStatus
+	Version  string
 }
 
 type systemStatus struct {
@@ -145,6 +146,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			Fail2ban: system.Fail2banActive(r.Context()),
 			SSHPort:  system.CurrentSSHPort(),
 		},
+		Version: Version,
 	})
 }
 
@@ -197,14 +199,30 @@ func (s *Server) handleClientDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	srv, _ := state.LoadServer()
+	remote := s.nodeServers()
+
+	localLabel := ""
+	if len(remote) > 0 {
+		localLabel = "本机"
+	}
 
 	nodes := make([]nodeView, 0)
-	for _, l := range protocol.ClientLinks(srv, c) {
-		nodes = append(nodes, nodeView{
-			Name:   l.Name,
-			URL:    l.URL,
-			QRPath: s.prefix + "/qr?data=" + url.QueryEscape(l.URL),
-		})
+	appendLinks := func(server model.Server, label string) {
+		for _, l := range protocol.ClientLinks(server, c, label) {
+			name := l.Name
+			if label != "" {
+				name = label + " · " + l.Name
+			}
+			nodes = append(nodes, nodeView{
+				Name:   name,
+				URL:    l.URL,
+				QRPath: s.prefix + "/qr?data=" + url.QueryEscape(l.URL),
+			})
+		}
+	}
+	appendLinks(srv, localLabel)
+	for _, ns := range remote {
+		appendLinks(ns.Server, ns.Name)
 	}
 	tr, _ := s.db.GetTraffic(c.ID)
 	s.render(w, "client.html", clientDetailData{
@@ -308,15 +326,21 @@ func (s *Server) handleSubscription(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	srv, _ := state.LoadServer()
+	nodes := s.nodeServers()
+
+	// With remote nodes present, label each server so client apps show them as
+	// distinct entries instead of deduping identical names.
+	localLabel := ""
+	if len(nodes) > 0 {
+		localLabel = "本机"
+	}
 
 	var lines []string
-	// This master's own node.
-	for _, l := range protocol.ClientLinks(srv, c) {
+	for _, l := range protocol.ClientLinks(srv, c, localLabel) {
 		lines = append(lines, l.URL)
 	}
-	// Plus every registered remote node.
-	for _, ns := range s.nodeServers() {
-		for _, l := range protocol.ClientLinks(ns, c) {
+	for _, ns := range nodes {
+		for _, l := range protocol.ClientLinks(ns.Server, c, ns.Name) {
 			lines = append(lines, l.URL)
 		}
 	}

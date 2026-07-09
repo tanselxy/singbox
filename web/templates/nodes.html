@@ -21,14 +21,12 @@
 
   <main>
     <section class="card">
-      <h3>本机接入信息</h3>
-      <p class="muted small">把这台机器加到其它「主控」面板时，用下面的地址和令牌。{{if .Managed}}<b class="alert">本机已被某主控接管。</b>{{end}}</p>
-      <label>Agent 地址
-        <span class="field"><input class="mono" readonly value="{{.SelfAgentURL}}"><button class="copy" data-url="{{.SelfAgentURL}}">复制</button></span>
+      <h3>本机接入码</h3>
+      <p class="muted small">要把这台机器交给某个「主控」面板管理时，复制下面这一串接入码，粘到主控的「添加节点」即可。{{if .Managed}}<b class="alert">本机已被某主控接管。</b>{{end}}</p>
+      <label>接入码
+        <span class="field"><input class="mono" readonly value="{{.AccessCode}}"><button class="copy" data-url="{{.AccessCode}}">复制</button></span>
       </label>
-      <label>Agent 令牌
-        <span class="field"><input class="mono" readonly value="{{.SelfToken}}"><button class="copy" data-url="{{.SelfToken}}">复制</button></span>
-      </label>
+      <p class="muted small">（接入码里已含地址 {{.SelfAgentURL}} 与令牌。）</p>
     </section>
 
     <section class="card">
@@ -37,13 +35,12 @@
         <button id="add-node">+ 添加节点</button>
       </div>
       <div id="node-form" class="add-form" hidden>
-        <input id="node-name" type="text" placeholder="节点名（唯一）">
-        <input id="node-address" type="text" placeholder="Agent 地址 https://ip:端口">
-        <input id="node-token" type="text" placeholder="Agent 令牌">
+        <input id="node-code" type="text" placeholder="粘贴节点的接入码" style="flex:2">
+        <input id="node-name" type="text" placeholder="节点名（可留空，默认用节点IP）">
         <button id="create-node">确认添加</button>
         <button id="cancel-node" class="link">取消</button>
       </div>
-      <p class="muted small">添加后，主控会把当前客户下发到该节点，订阅将自动包含该节点的所有协议。</p>
+      <p class="muted small">在每个节点的「节点」页复制其接入码，粘到这里即可。添加后主控会把当前客户下发到该节点，订阅自动包含该节点所有协议。</p>
       <table class="clients">
         <thead>
           <tr><th>名称</th><th>地址</th><th>状态</th><th>CPU</th><th>内存</th><th>磁盘</th><th>操作</th></tr>

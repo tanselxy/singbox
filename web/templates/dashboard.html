@@ -96,6 +96,17 @@
       <h3>系统与安全</h3>
       <div class="sys-row">
         <div>
+          <div class="muted">面板版本</div>
+          <span id="ver-current" class="mono">{{.Version}}</span>
+          <span id="ver-latest" class="small muted"></span>
+        </div>
+        <span class="field" style="flex:0 0 auto">
+          <button id="check-update">检查更新</button>
+          <button id="do-upgrade" hidden>升级到新版</button>
+        </span>
+      </div>
+      <div class="sys-row">
+        <div>
           <div class="muted">BBR + TCP 优化</div>
           <span class="badge {{if .System.BBR}}ok{{else}}down{{end}}">{{if .System.BBR}}已开启{{else}}未开启{{end}}</span>
         </div>

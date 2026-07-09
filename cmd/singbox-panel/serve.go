@@ -16,6 +16,8 @@ func runServe(ctx context.Context, args []string) error {
 		return err
 	}
 
+	panel.Version = version // expose build version for the upgrade check
+
 	cfg, freshPassword, err := panel.EnsureConfig()
 	if err != nil {
 		return err

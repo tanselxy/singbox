@@ -79,6 +79,10 @@ func (s *Server) Handler() http.Handler {
 	// System optimization / security.
 	mux.HandleFunc("POST "+p+"/api/system/{action}", s.protected(s.handleSystemAction))
 
+	// Version check / in-panel upgrade.
+	mux.HandleFunc("GET "+p+"/api/version", s.protected(s.handleVersion))
+	mux.HandleFunc("POST "+p+"/api/upgrade", s.protected(s.handleUpgrade))
+
 	// Node management (master side).
 	mux.HandleFunc("GET "+p+"/nodes", s.protected(s.handleNodesPage))
 	mux.HandleFunc("POST "+p+"/api/nodes", s.protected(s.handleNodeCreate))

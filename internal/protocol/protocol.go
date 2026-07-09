@@ -53,8 +53,14 @@ func Inbounds(srv model.Server, clients []model.Client) []sbschema.Inbound {
 	}
 }
 
-// ClientLinks builds every share link for a single client.
-func ClientLinks(srv model.Server, c model.Client) []model.Link {
+// ClientLinks builds every share link for a single client. label, when set,
+// replaces the client name in the link fragment so links from different nodes
+// are distinguishable in client apps (e.g. "荷兰-Reality" vs "本机-Reality");
+// only the display name changes, never the credentials.
+func ClientLinks(srv model.Server, c model.Client, label string) []model.Link {
+	if label != "" {
+		c.Name = label
+	}
 	if srv.IPv6Only {
 		if srv.CDNDomain == "" {
 			return nil
