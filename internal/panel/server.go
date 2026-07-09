@@ -104,6 +104,8 @@ func (s *Server) Handler() http.Handler {
 
 	// Client management.
 	mux.HandleFunc("POST "+p+"/api/clients", s.protected(s.handleClientCreate))
+	mux.HandleFunc("GET "+p+"/api/clients/{id}/devices", s.protected(s.handleClientDevices))
+	mux.HandleFunc("POST "+p+"/api/clients/{id}/devices/kick", s.protected(s.handleClientDeviceKick))
 	mux.HandleFunc("POST "+p+"/api/clients/{id}/{action}", s.protected(s.handleClientAction))
 
 	// System optimization / security.

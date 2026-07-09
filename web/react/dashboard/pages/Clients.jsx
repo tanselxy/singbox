@@ -13,6 +13,10 @@ export function Clients({ data, refresh, prefix }) {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
+  const [devicesOpen, setDevicesOpen] = useState(false);
+  const [devicesClient, setDevicesClient] = useState(null);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [devices, setDevices] = useState([]);
   const [form, setForm] = useState(EMPTY_CLIENT_FORM);
   const clients = data.Clients || [];
 
@@ -76,12 +80,42 @@ export function Clients({ data, refresh, prefix }) {
     refresh();
   }
 
+  async function openDevices(client) {
+    setDevicesClient(client);
+    setDevices([]);
+    setDevicesOpen(true);
+    setDevicesLoading(true);
+    try {
+      const res = await fetch(`${prefix}/api/clients/${client.ID}/devices`);
+      const payload = await res.json();
+      if (!payload.ok) {
+        alert(`读取设备失败: ${payload.error || ""}`);
+        return;
+      }
+      setDevices(payload.devices || []);
+    } finally {
+      setDevicesLoading(false);
+    }
+  }
+
+  async function kickDevice(device) {
+    if (!devicesClient || !confirm(`确认踢下线 ${device.source_ip}？该 IP 下当前连接会被关闭。`)) return;
+    const body = new URLSearchParams({ source_ip: device.source_ip });
+    const res = await fetch(`${prefix}/api/clients/${devicesClient.ID}/devices/kick`, { method: "POST", body });
+    const payload = await res.json();
+    if (!payload.ok) {
+      alert(`踢下线失败: ${payload.error || ""}`);
+      return;
+    }
+    await openDevices(devicesClient);
+  }
+
   return (
     <>
       <PageHead meta={VIEW_META.clients} action={<Button onClick={openCreate}>+ 新增客户</Button>} />
       <Card>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">流量/到期到点会自动停用该客户；设备数目前仅记录，暂不自动限制。</p>
+          <p className="text-sm text-muted-foreground">流量/到期到点会自动停用该客户；设备数按不同来源 IP 进行连接限制。</p>
           <Table>
             <TableHeader>
               <TableRow>
@@ -117,6 +151,7 @@ export function Clients({ data, refresh, prefix }) {
                         {client.Enabled ? "停用" : "启用"}
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => clientAction(client, "reset-subscription")}>重置订阅</Button>
+                      <Button variant="outline" size="sm" onClick={() => openDevices(client)}>设备</Button>
                       <Button variant="outline" size="sm" onClick={() => clientAction(client, "reset-traffic")}>清零流量</Button>
                       <Button variant="destructive" size="sm" onClick={() => clientAction(client, "delete")}>删除</Button>
                     </div>
@@ -139,6 +174,15 @@ export function Clients({ data, refresh, prefix }) {
           setEditingClient(null);
         }}
         onSubmit={submitClient}
+      />
+      <ClientDevicesDialog
+        open={devicesOpen}
+        client={devicesClient}
+        loading={devicesLoading}
+        devices={devices}
+        onRefresh={() => devicesClient && openDevices(devicesClient)}
+        onKick={kickDevice}
+        onCancel={() => setDevicesOpen(false)}
       />
     </>
   );
@@ -176,6 +220,65 @@ function ClientCreateDialog({ open, form, creating, editing, onChange, onCancel,
       <Label>到期日期
         <Input value={form.expires} onChange={(e) => onChange({ ...form, expires: e.target.value })} type="date" title="到期日期（留空=永久）" />
       </Label>
+    </ModalFrame>
+  );
+}
+
+function ClientDevicesDialog({ open, client, loading, devices, onRefresh, onKick, onCancel }) {
+  return (
+    <ModalFrame
+      open={open}
+      onCancel={onCancel}
+      eyebrow="Devices"
+      title={client ? `${client.Name} 的设备` : "设备"}
+      className="sm:max-w-4xl"
+      footer={
+        <>
+          <Button variant="outline" onClick={onCancel}>关闭</Button>
+          <Button onClick={onRefresh} disabled={loading}>{loading ? "加载中..." : "刷新"}</Button>
+        </>
+      }
+    >
+      <div className="max-h-[56vh] overflow-auto rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>来源 IP</TableHead>
+              <TableHead>连接</TableHead>
+              <TableHead>上传</TableHead>
+              <TableHead>下载</TableHead>
+              <TableHead>协议</TableHead>
+              <TableHead>最近连接</TableHead>
+              <TableHead className="text-right">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading && (
+              <TableRow>
+                <TableCell colSpan="7" className="text-muted-foreground">正在加载设备...</TableCell>
+              </TableRow>
+            )}
+            {!loading && devices.length === 0 && (
+              <TableRow>
+                <TableCell colSpan="7" className="text-muted-foreground">当前没有在线设备。</TableCell>
+              </TableRow>
+            )}
+            {!loading && devices.map((device) => (
+              <TableRow key={device.source_ip}>
+                <TableCell className="font-medium tabular-nums">{device.source_ip}</TableCell>
+                <TableCell>{device.connections}</TableCell>
+                <TableCell>{device.upload}</TableCell>
+                <TableCell>{device.download}</TableCell>
+                <TableCell className="max-w-36 truncate">{(device.protocols || []).join("、") || "-"}</TableCell>
+                <TableCell className="whitespace-nowrap text-muted-foreground">{device.last_seen}</TableCell>
+                <TableCell className="text-right">
+                  <Button variant="destructive" size="sm" onClick={() => onKick(device)}>踢下线</Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </ModalFrame>
   );
 }

@@ -36,7 +36,7 @@ export function Metric({ label, value, alert }) {
 }
 
 // ModalFrame keeps its original API but renders a shadcn/Radix dialog.
-export function ModalFrame({ open, onCancel, eyebrow, title, children, footer }) {
+export function ModalFrame({ open, onCancel, eyebrow, title, children, footer, className }) {
   return (
     <Dialog
       open={open}
@@ -44,7 +44,7 @@ export function ModalFrame({ open, onCancel, eyebrow, title, children, footer })
         if (!next) onCancel();
       }}
     >
-      <DialogContent>
+      <DialogContent className={className}>
         <DialogHeader>
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{eyebrow}</p>
           <DialogTitle>{title}</DialogTitle>
