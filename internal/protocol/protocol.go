@@ -38,7 +38,14 @@ const (
 // Inbounds builds the sing-box inbounds for a server and its clients. Each
 // client becomes a user entry in every inbound. IPv6-only deployments expose
 // only the VLESS-CDN listener.
+//
+// With no clients there are no inbounds at all: sing-box rejects a config
+// whose inbounds have empty users ("missing users"), and an empty inbound
+// list keeps the service validly running with every port closed.
 func Inbounds(srv model.Server, clients []model.Client) []sbschema.Inbound {
+	if len(clients) == 0 {
+		return []sbschema.Inbound{}
+	}
 	if srv.IPv6Only {
 		return []sbschema.Inbound{vlessCDNInbound(srv, clients)}
 	}

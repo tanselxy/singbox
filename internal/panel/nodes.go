@@ -189,6 +189,7 @@ func (s *Server) pollNodesOnce(ctx context.Context) {
 type nodeRow struct {
 	ID          int64
 	Name        string
+	Tag         string
 	Address     string
 	Online      bool
 	CPU         string
@@ -245,7 +246,7 @@ func (s *Server) nodeRows(ctx context.Context) ([]nodeRow, error) {
 	rows := make([]nodeRow, len(nodes))
 	var wg sync.WaitGroup
 	for i, n := range nodes {
-		rows[i] = nodeRow{ID: n.ID, Name: n.Name, Address: n.Address}
+		rows[i] = nodeRow{ID: n.ID, Name: n.Name, Tag: n.Tag, Address: n.Address}
 		wg.Add(1)
 		go func(i int, n model.Node) {
 			defer wg.Done()
@@ -285,6 +286,7 @@ func (s *Server) handleNodeCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(r.PostFormValue("name"))
+	tag := strings.TrimSpace(r.PostFormValue("tag"))
 
 	// Prefer a single access code; fall back to separate address/token fields.
 	var address, token string
@@ -319,7 +321,7 @@ func (s *Server) handleNodeCreate(w http.ResponseWriter, r *http.Request) {
 	serverJSON, _ := json.Marshal(srv)
 
 	node, err := s.db.CreateNode(model.Node{
-		Name: name, Address: address, Token: token,
+		Name: name, Tag: tag, Address: address, Token: token,
 		ServerJSON: string(serverJSON), CreatedAt: time.Now().Unix(),
 	})
 	if err != nil {
@@ -376,11 +378,12 @@ func (s *Server) handleNodeUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(r.PostFormValue("name"))
+	tag := strings.TrimSpace(r.PostFormValue("tag"))
 	if name == "" {
 		writeJSON(w, map[string]any{"ok": false, "error": "节点名不能为空"})
 		return
 	}
-	if err := s.db.UpdateNodeName(id, name); err != nil {
+	if err := s.db.UpdateNodeDetails(id, name, tag); err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}

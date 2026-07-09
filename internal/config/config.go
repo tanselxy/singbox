@@ -72,22 +72,24 @@ func Build(srv model.Server, clients []model.Client) sbschema.Config {
 // stats service listing every client's user name so per-user traffic counters
 // are tracked.
 func experimental(clients []model.Client) json.RawMessage {
-	users := make([]string, 0, len(clients))
-	for _, c := range clients {
-		users = append(users, c.Name)
-	}
 	block := map[string]any{
 		"clash_api": map[string]any{
 			"external_controller": ClashAPIAddr,
 			"secret":              ClashAPISecret,
 		},
-		"v2ray_api": map[string]any{
+	}
+	if len(clients) > 0 {
+		users := make([]string, 0, len(clients))
+		for _, c := range clients {
+			users = append(users, c.Name)
+		}
+		block["v2ray_api"] = map[string]any{
 			"listen": V2RayAPIAddr,
 			"stats": map[string]any{
 				"enabled": true,
 				"users":   users,
 			},
-		},
+		}
 	}
 	b, _ := json.Marshal(block)
 	return b

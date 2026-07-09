@@ -21,6 +21,21 @@ func Run(ctx context.Context, name string, args ...string) error {
 	return nil
 }
 
+// RunCaptured executes a command and, on failure, includes its combined
+// output in the returned error, for short commands whose diagnostics must
+// reach the user (e.g. config validation) instead of only the process log.
+func RunCaptured(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			return fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, msg)
+		}
+		return fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
+	}
+	return nil
+}
+
 // Output runs a command and returns its trimmed combined stdout.
 func Output(ctx context.Context, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)

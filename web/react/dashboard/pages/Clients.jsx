@@ -66,6 +66,7 @@ export function Clients({ data, refresh, prefix }) {
 
   async function clientAction(client, action) {
     if (action === "delete" && !confirm("确认删除该客户？其订阅将立即失效。")) return;
+    if (action === "reset-subscription" && !confirm("确认重置订阅？该客户旧订阅地址和所有旧协议链接会立即失效。")) return;
     const res = await fetch(`${prefix}/api/clients/${client.ID}/${action}`, { method: "POST" });
     const payload = await res.json();
     if (!payload.ok) {
@@ -115,6 +116,7 @@ export function Clients({ data, refresh, prefix }) {
                       <Button variant="outline" size="sm" onClick={() => clientAction(client, client.Enabled ? "disable" : "enable")}>
                         {client.Enabled ? "停用" : "启用"}
                       </Button>
+                      <Button variant="outline" size="sm" onClick={() => clientAction(client, "reset-subscription")}>重置订阅</Button>
                       <Button variant="outline" size="sm" onClick={() => clientAction(client, "reset-traffic")}>清零流量</Button>
                       <Button variant="destructive" size="sm" onClick={() => clientAction(client, "delete")}>删除</Button>
                     </div>

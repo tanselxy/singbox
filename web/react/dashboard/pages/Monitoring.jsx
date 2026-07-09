@@ -14,7 +14,7 @@ export function Monitoring({ prefix }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingNode, setEditingNode] = useState(null);
-  const [nodeForm, setNodeForm] = useState({ code: "", name: "" });
+  const [nodeForm, setNodeForm] = useState({ code: "", name: "", tag: "" });
   const [history, setHistory] = useState({});
   const [loading, setLoading] = useState(true);
 
@@ -56,13 +56,13 @@ export function Monitoring({ prefix }) {
 
   function openCreateNode() {
     setEditingNode(null);
-    setNodeForm({ code: "", name: "" });
+    setNodeForm({ code: "", name: "", tag: "" });
     setOpen(true);
   }
 
   function openEditNode(node) {
     setEditingNode(node);
-    setNodeForm({ code: "", name: node.Name || "" });
+    setNodeForm({ code: "", name: node.Name || "", tag: node.Tag || "" });
     setOpen(true);
   }
 
@@ -79,8 +79,8 @@ export function Monitoring({ prefix }) {
     try {
       const body = new URLSearchParams(
         editingNode
-          ? { name: nodeForm.name.trim() }
-          : { code: nodeForm.code.trim(), name: nodeForm.name.trim() },
+          ? { name: nodeForm.name.trim(), tag: nodeForm.tag.trim() }
+          : { code: nodeForm.code.trim(), name: nodeForm.name.trim(), tag: nodeForm.tag.trim() },
       );
       const url = editingNode ? `${prefix}/api/nodes/${editingNode.ID}/update` : `${prefix}/api/nodes`;
       const res = await fetch(url, { method: "POST", body });
@@ -90,7 +90,7 @@ export function Monitoring({ prefix }) {
         return;
       }
       if (payload.warn) alert(payload.warn);
-      setNodeForm({ code: "", name: "" });
+      setNodeForm({ code: "", name: "", tag: "" });
       setEditingNode(null);
       setOpen(false);
       load();
@@ -184,6 +184,9 @@ function NodeDialog({ open, form, saving, editing, onChange, onCancel, onSubmit 
       <Label>节点名
         <Input value={form.name} onChange={(e) => onChange({ ...form, name: e.target.value })} placeholder={editing ? "节点显示名称" : "可留空，默认使用节点 IP"} autoFocus={editing} />
       </Label>
+      <Label>标签 / 用途
+        <Input value={form.tag} onChange={(e) => onChange({ ...form, tag: e.target.value })} placeholder="例如：荷兰中转、流媒体、备用节点" />
+      </Label>
     </ModalFrame>
   );
 }
@@ -236,25 +239,28 @@ function NodeMetricCard({ node, history, onEdit, onDelete }) {
           <h4 className="truncate font-medium">{node.Name}</h4>
           <p className="truncate font-mono text-xs text-muted-foreground">{node.Address}</p>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          <Badge active={node.Online}>{node.Online ? "在线" : "离线"}</Badge>
-          <div className="flex gap-1">
-            <Button size="sm" variant="outline" onClick={() => onEdit(node)}>编辑</Button>
-            <Button size="sm" variant="destructive" onClick={() => onDelete(node)}>删除</Button>
-          </div>
-        </div>
+        <Badge active={node.Online}>{node.Online ? "在线" : "离线"}</Badge>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <MetricBlock label="CPU" sub={`${node.CPUCores || "-"} 核`} value={`${node.CPUPercent.toFixed(1)}%`} percent={node.CPUPercent} tone="text-chart-1" />
         <MetricBlock label="内存" value={node.Mem || "-"} percent={node.MemPercent} tone="text-chart-2" />
         <MetricBlock label="硬盘" value={node.Disk || "-"} percent={node.DiskPercent} tone="text-chart-3" />
-        <MetricBlock label="负载" sub={`5m ${formatLoad(node.Load5)} · 15m ${formatLoad(node.Load15)}`} value={formatLoad(node.Load1)} percent={loadPercent(node)} tone="text-chart-4" />
+        <MetricBlock label="负载" value={formatLoad(node.Load1)} percent={loadPercent(node)} tone="text-chart-4" />
       </div>
       <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2 lg:grid-cols-4">
         <MiniMetric label="上行" value={rates.upRate} />
         <MiniMetric label="下行" value={rates.downRate} />
         <MiniMetric label="出站累计" value={formatBytes(node.NetTxBytes)} />
         <MiniMetric label="入站累计" value={formatBytes(node.NetRxBytes)} />
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <Button size="sm" variant="secondary" onClick={() => onEdit(node)}>
+          {node.Tag || "添加标签"}
+        </Button>
+        <div className="flex gap-1">
+          <Button size="sm" variant="outline" onClick={() => onEdit(node)}>编辑</Button>
+          <Button size="sm" variant="destructive" onClick={() => onDelete(node)}>删除</Button>
+        </div>
       </div>
     </div>
   );
@@ -264,8 +270,8 @@ function MetricBlock({ label, sub, value, percent, tone }) {
   return (
     <div className={tone}>
       <div className="mb-1 flex items-start justify-between gap-3 text-sm">
-        <span>
-          <span className="block text-muted-foreground">{label}</span>
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="text-muted-foreground">{label}</span>
           {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
         </span>
         <strong className="tabular-nums text-foreground">{value}</strong>

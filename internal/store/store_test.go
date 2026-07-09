@@ -195,3 +195,29 @@ func TestSetEnabledAndQuota(t *testing.T) {
 		t.Errorf("quota = %d, want %d", got.QuotaBytes, int64(1<<30))
 	}
 }
+
+func TestUpdateClientCredentialsPreservesMetadata(t *testing.T) {
+	s := openTemp(t)
+	c := sampleClient("alice")
+	c.QuotaBytes = 1 << 30
+	c.DeviceLimit = 2
+	c.ExpiresAt = 1893456000
+	created, _ := s.CreateClient(c)
+
+	created.UUID = "new-uuid"
+	created.Password = "new-password"
+	created.SS2022Key = "new-ss"
+	created.ShadowTLSPassword = "new-stls"
+	created.SubToken = "new-token"
+	if err := s.UpdateClientCredentials(created); err != nil {
+		t.Fatal(err)
+	}
+
+	got, _ := s.GetClient(created.ID)
+	if got.UUID != "new-uuid" || got.Password != "new-password" || got.SS2022Key != "new-ss" || got.ShadowTLSPassword != "new-stls" || got.SubToken != "new-token" {
+		t.Fatalf("credentials were not updated: %+v", got)
+	}
+	if got.Name != "alice" || got.QuotaBytes != 1<<30 || got.DeviceLimit != 2 || got.ExpiresAt != 1893456000 {
+		t.Fatalf("metadata should be preserved: %+v", got)
+	}
+}

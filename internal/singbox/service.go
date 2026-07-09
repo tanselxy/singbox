@@ -44,9 +44,10 @@ func WriteUnit(ctx context.Context) error {
 	return system.Run(ctx, "systemctl", "daemon-reload")
 }
 
-// Check validates a configuration file with `sing-box check`.
+// Check validates a configuration file with `sing-box check`, surfacing the
+// validator's own diagnostics in the error.
 func Check(ctx context.Context, configPath string) error {
-	return system.Run(ctx, Path(), "check", "-c", configPath)
+	return system.RunCaptured(ctx, Path(), "check", "-c", configPath)
 }
 
 // EnableAndStart enables the service on boot and (re)starts it.

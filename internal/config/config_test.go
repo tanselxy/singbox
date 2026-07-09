@@ -71,3 +71,40 @@ func TestMarshalProducesValidConfig(t *testing.T) {
 		t.Errorf("v2ray_api stats.users = %v, want [alice]", doc.Experimental.V2RayAPI.Stats.Users)
 	}
 }
+
+func TestMarshalWithNoClientsOmitsV2RayAPI(t *testing.T) {
+	srv := model.Server{
+		ServerIP:        "203.0.113.7",
+		SNI:             "www.apple.com",
+		CertFile:        "/etc/sing-box/cert/cert.pem",
+		KeyFile:         "/etc/sing-box/cert/private.key",
+		SS2022ServerKey: "c2VydmVyUFNL",
+		Reality:         model.Reality{PrivateKey: "priv", PublicKey: "pub", ShortID: "0123456789abcdef"},
+		Ports:           model.Ports{Reality: 20000, Hysteria2: 50000, ShadowTLS: 31000, TUIC: 61555, TrojanWS: 63333, VLESSCDN: 4433},
+	}
+
+	b, err := Marshal(srv, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !json.Valid(b) {
+		t.Fatal("marshalled config is not valid JSON")
+	}
+
+	var doc struct {
+		Inbounds     []json.RawMessage          `json:"inbounds"`
+		Experimental map[string]json.RawMessage `json:"experimental"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(doc.Inbounds) != 0 {
+		t.Errorf("expected no inbounds, got %d", len(doc.Inbounds))
+	}
+	if _, ok := doc.Experimental["clash_api"]; !ok {
+		t.Fatal("expected clash_api to remain available")
+	}
+	if _, ok := doc.Experimental["v2ray_api"]; ok {
+		t.Fatal("v2ray_api should be omitted when there are no users")
+	}
+}

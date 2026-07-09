@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS traffic (
 CREATE TABLE IF NOT EXISTS nodes (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT NOT NULL UNIQUE,
+    tag         TEXT NOT NULL DEFAULT '',
     address     TEXT NOT NULL,
     token       TEXT NOT NULL,
     server_json TEXT NOT NULL DEFAULT '',
@@ -81,6 +82,7 @@ CREATE TABLE IF NOT EXISTS settings (
 	for _, col := range []string{
 		"ALTER TABLE clients ADD COLUMN device_limit INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE clients ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE nodes ADD COLUMN tag TEXT NOT NULL DEFAULT ''",
 	} {
 		if _, err := s.db.Exec(col); err != nil && !strings.Contains(err.Error(), "duplicate column") {
 			return fmt.Errorf("migrate: %w", err)
@@ -196,6 +198,16 @@ func (s *Store) UpdateClient(c model.Client) error {
 	return err
 }
 
+// UpdateClientCredentials replaces every client credential and subscription
+// token while preserving metadata and traffic counters.
+func (s *Store) UpdateClientCredentials(c model.Client) error {
+	_, err := s.db.Exec(
+		`UPDATE clients SET uuid = ?, password = ?, ss2022_key = ?, shadowtls_password = ?, sub_token = ? WHERE id = ?`,
+		c.UUID, c.Password, c.SS2022Key, c.ShadowTLSPassword, c.SubToken, c.ID,
+	)
+	return err
+}
+
 // SetEnabled toggles a client's enabled flag.
 func (s *Store) SetEnabled(id int64, enabled bool) error {
 	_, err := s.db.Exec(`UPDATE clients SET enabled = ? WHERE id = ?`, boolInt(enabled), id)
@@ -222,8 +234,8 @@ func (s *Store) DeleteClient(id int64) error {
 // CreateNode inserts a remote node.
 func (s *Store) CreateNode(n model.Node) (model.Node, error) {
 	res, err := s.db.Exec(
-		`INSERT INTO nodes (name, address, token, server_json, created_at) VALUES (?, ?, ?, ?, ?)`,
-		n.Name, n.Address, n.Token, n.ServerJSON, n.CreatedAt,
+		`INSERT INTO nodes (name, tag, address, token, server_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		n.Name, n.Tag, n.Address, n.Token, n.ServerJSON, n.CreatedAt,
 	)
 	if err != nil {
 		return model.Node{}, fmt.Errorf("create node: %w", err)
@@ -232,7 +244,7 @@ func (s *Store) CreateNode(n model.Node) (model.Node, error) {
 	return n, nil
 }
 
-const nodeColumns = `id, name, address, token, server_json, created_at`
+const nodeColumns = `id, name, tag, address, token, server_json, created_at`
 
 // ListNodes returns all nodes ordered by id.
 func (s *Store) ListNodes() ([]model.Node, error) {
@@ -244,7 +256,7 @@ func (s *Store) ListNodes() ([]model.Node, error) {
 	var out []model.Node
 	for rows.Next() {
 		var n model.Node
-		if err := rows.Scan(&n.ID, &n.Name, &n.Address, &n.Token, &n.ServerJSON, &n.CreatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.Name, &n.Tag, &n.Address, &n.Token, &n.ServerJSON, &n.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, n)
@@ -256,7 +268,7 @@ func (s *Store) ListNodes() ([]model.Node, error) {
 func (s *Store) GetNode(id int64) (model.Node, error) {
 	row := s.db.QueryRow(`SELECT `+nodeColumns+` FROM nodes WHERE id = ?`, id)
 	var n model.Node
-	err := row.Scan(&n.ID, &n.Name, &n.Address, &n.Token, &n.ServerJSON, &n.CreatedAt)
+	err := row.Scan(&n.ID, &n.Name, &n.Tag, &n.Address, &n.Token, &n.ServerJSON, &n.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.Node{}, ErrNotFound
 	}
@@ -269,9 +281,9 @@ func (s *Store) UpdateNodeServer(id int64, serverJSON string) error {
 	return err
 }
 
-// UpdateNodeName updates the display name for a registered node.
-func (s *Store) UpdateNodeName(id int64, name string) error {
-	_, err := s.db.Exec(`UPDATE nodes SET name = ? WHERE id = ?`, name, id)
+// UpdateNodeDetails updates display metadata for a registered node.
+func (s *Store) UpdateNodeDetails(id int64, name, tag string) error {
+	_, err := s.db.Exec(`UPDATE nodes SET name = ?, tag = ? WHERE id = ?`, name, tag, id)
 	return err
 }
 

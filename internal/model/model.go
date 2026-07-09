@@ -163,6 +163,7 @@ func (c Client) Active(now int64) bool {
 type Node struct {
 	ID      int64  `json:"id"`
 	Name    string `json:"name"`
+	Tag     string `json:"tag"`     // short purpose label shown in monitoring
 	Address string `json:"address"` // agent base URL, e.g. https://1.2.3.4:PORT (no trailing slash)
 	Token   string `json:"token"`   // agent bearer token
 

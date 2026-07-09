@@ -378,6 +378,14 @@ func (s *Server) handleClientAction(w http.ResponseWriter, r *http.Request) {
 		c.DeviceLimit = parseIntDefault(r.PostFormValue("device_limit"), 0)
 		c.ExpiresAt = parseExpiry(r.PostFormValue("expires_at"))
 		err, regen = s.db.UpdateClient(c), true
+	case "reset-subscription":
+		fresh, genErr := secret.NewClient()
+		if genErr != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": genErr.Error()})
+			return
+		}
+		fresh.ID = id
+		err, regen = s.db.UpdateClientCredentials(fresh), true
 	case "enable":
 		err, regen = s.db.SetEnabled(id, true), true
 	case "disable":
