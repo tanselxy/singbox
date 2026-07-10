@@ -221,3 +221,35 @@ func TestUpdateClientCredentialsPreservesMetadata(t *testing.T) {
 		t.Fatalf("metadata should be preserved: %+v", got)
 	}
 }
+
+func TestNodeBillingRoundTripAndUpdate(t *testing.T) {
+	s := openTemp(t)
+	node, err := s.CreateNode(model.Node{
+		Name:         "node-a",
+		Tag:          "测试机,学习机",
+		Address:      "https://127.0.0.1:9443",
+		Token:        "token",
+		ServerJSON:   "{}",
+		CreatedAt:    1000,
+		StartAt:      1893456000,
+		EndAt:        1896134400,
+		BillingCycle: "monthly",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetNode(node.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.StartAt != 1893456000 || got.EndAt != 1896134400 || got.BillingCycle != "monthly" {
+		t.Fatalf("node billing not persisted: %+v", got)
+	}
+	if err := s.UpdateNodeBilling(node.ID, 1896134400, 1898726400, 0); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.GetNode(node.ID)
+	if got.StartAt != 1896134400 || got.EndAt != 1898726400 || got.NextRemindAt != 0 {
+		t.Fatalf("node billing not updated: %+v", got)
+	}
+}

@@ -17,7 +17,7 @@ function DashboardRoutes({ data, error, loadDashboard, prefix, serviceAction }) 
   else {
     content = (
       <Routes>
-        <Route index element={<Overview data={data} onServiceAction={serviceAction} />} />
+        <Route index element={<Overview data={data} prefix={prefix} onServiceAction={serviceAction} />} />
         <Route path="clients" element={<Clients data={data} refresh={loadDashboard} prefix={prefix} />} />
         <Route path="monitoring" element={<Monitoring prefix={prefix} />} />
         <Route path="notifications" element={<Notifications prefix={prefix} />} />
@@ -56,10 +56,10 @@ function App({ root }) {
     const res = await fetch(`${prefix}/api/service/${action}`, { method: "POST" });
     const payload = await res.json();
     if (!payload.ok) {
-      alert(`操作失败: ${payload.error || "未知错误"}`);
-      return;
+      throw new Error(payload.error || "未知错误");
     }
     setData((current) => ({ ...current, Active: payload.active }));
+    return payload;
   }
 
   useEffect(() => {
@@ -87,7 +87,21 @@ function App({ root }) {
   );
 }
 
+function PublicMonitoringApp({ root }) {
+  const prefix = root.dataset.prefix || "";
+  return (
+    <div className="mx-auto min-h-screen w-full max-w-7xl p-4 md:p-6">
+      <Monitoring prefix={prefix} publicView apiPath={`${prefix}/api/public/node-metrics`} />
+    </div>
+  );
+}
+
 const root = document.getElementById("dashboard-root");
 if (root) {
   createRoot(root).render(<App root={root} />);
+}
+
+const publicMonitoringRoot = document.getElementById("public-monitoring-root");
+if (publicMonitoringRoot) {
+  createRoot(publicMonitoringRoot).render(<PublicMonitoringApp root={publicMonitoringRoot} />);
 }

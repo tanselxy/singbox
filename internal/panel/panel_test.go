@@ -39,6 +39,7 @@ func testServer(t *testing.T) (*httptest.Server, Config) {
 	cfg := Config{
 		PathPrefix: "abc",
 		SessionKey: hex.EncodeToString([]byte("0123456789abcdef0123456789abcdef")),
+		AgentToken: "test-agent-token",
 	}
 	if err := cfg.SetPassword("s3cret-pass"); err != nil {
 		t.Fatal(err)
@@ -95,6 +96,47 @@ func TestProtectedRedirectsWhenUnauthed(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Fatalf("expected redirect, got %d", resp.StatusCode)
+	}
+}
+
+func TestPublicMonitoringDoesNotRequireAuthAndHidesAddress(t *testing.T) {
+	ts, cfg := testServer(t)
+	db, err := store.Open(state.DBPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.CreateNode(model.Node{
+		Name: "public-node", Address: ts.URL, Token: cfg.AgentToken,
+		ServerJSON: "{}", CreatedAt: 1000,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+
+	resp, err := http.Get(ts.URL + "/abc/public/monitoring")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("public monitoring status = %d", resp.StatusCode)
+	}
+	body := readBody(t, resp)
+	if !strings.Contains(body, "public-monitoring-root") {
+		t.Fatal("public monitoring page should render public root")
+	}
+
+	apiResp, err := http.Get(ts.URL + "/abc/api/public/node-metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer apiResp.Body.Close()
+	if apiResp.StatusCode != http.StatusOK {
+		t.Fatalf("public metrics status = %d", apiResp.StatusCode)
+	}
+	apiBody := readBody(t, apiResp)
+	if strings.Contains(apiBody, "https://") || strings.Contains(apiBody, "127.0.0.1") {
+		t.Fatalf("public metrics should hide node addresses: %s", apiBody)
 	}
 }
 
@@ -181,6 +223,42 @@ func TestSubscriptionByToken(t *testing.T) {
 	resp2, _ := http.Get(ts.URL + "/abc/sub/nope")
 	if resp2.StatusCode != http.StatusNotFound {
 		t.Errorf("unknown token should 404, got %d", resp2.StatusCode)
+	}
+}
+
+func TestSubscriptionSupportsClashYAML(t *testing.T) {
+	ts, _ := testServer(t)
+	resp, err := http.Get(ts.URL + "/abc/sub/tok-alice?target=clash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("clash subscription status = %d", resp.StatusCode)
+	}
+	body := readBody(t, resp)
+	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/yaml") {
+		t.Fatalf("clash content-type = %q, want text/yaml", ct)
+	}
+	for _, want := range []string{"proxies:", "proxy-groups:", "rules:", `type: "vless"`, `name: "alice-Reality"`, "reality-opts:"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("clash subscription missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestSubscriptionDetectsClashUserAgent(t *testing.T) {
+	ts, _ := testServer(t)
+	req, _ := http.NewRequest("GET", ts.URL+"/abc/sub/tok-alice", nil)
+	req.Header.Set("User-Agent", "clash-verge/v2")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body := readBody(t, resp)
+	if !strings.Contains(body, "proxy-groups:") {
+		t.Fatalf("clash user-agent should receive YAML, got:\n%s", body)
 	}
 }
 

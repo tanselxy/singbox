@@ -166,6 +166,13 @@ type Node struct {
 	Address string `json:"address"` // agent base URL, e.g. https://1.2.3.4:PORT (no trailing slash)
 	Token   string `json:"token"`   // agent bearer token
 
+	// Billing dates track the machine purchase / renewal cycle. EndAt is the
+	// next renewal date; BillingCycle controls automatic rollover after EndAt.
+	StartAt      int64  `json:"start_at"`
+	EndAt        int64  `json:"end_at"`
+	BillingCycle string `json:"billing_cycle"`
+	NextRemindAt int64  `json:"next_remind_at"`
+
 	// ServerJSON caches the node's model.Server (fetched from the node) so the
 	// master can generate that node's links for subscriptions without a live
 	// call. Refreshed when the node is (re)registered.

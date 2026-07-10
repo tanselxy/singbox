@@ -68,7 +68,11 @@ CREATE TABLE IF NOT EXISTS nodes (
     address     TEXT NOT NULL,
     token       TEXT NOT NULL,
     server_json TEXT NOT NULL DEFAULT '',
-    created_at  INTEGER NOT NULL
+    created_at  INTEGER NOT NULL,
+    start_at    INTEGER NOT NULL DEFAULT 0,
+    end_at      INTEGER NOT NULL DEFAULT 0,
+    billing_cycle TEXT NOT NULL DEFAULT '',
+    next_remind_at INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
@@ -83,6 +87,10 @@ CREATE TABLE IF NOT EXISTS settings (
 		"ALTER TABLE clients ADD COLUMN device_limit INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE clients ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE nodes ADD COLUMN tag TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE nodes ADD COLUMN start_at INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE nodes ADD COLUMN end_at INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE nodes ADD COLUMN billing_cycle TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE nodes ADD COLUMN next_remind_at INTEGER NOT NULL DEFAULT 0",
 	} {
 		if _, err := s.db.Exec(col); err != nil && !strings.Contains(err.Error(), "duplicate column") {
 			return fmt.Errorf("migrate: %w", err)
@@ -234,8 +242,9 @@ func (s *Store) DeleteClient(id int64) error {
 // CreateNode inserts a remote node.
 func (s *Store) CreateNode(n model.Node) (model.Node, error) {
 	res, err := s.db.Exec(
-		`INSERT INTO nodes (name, tag, address, token, server_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		n.Name, n.Tag, n.Address, n.Token, n.ServerJSON, n.CreatedAt,
+		`INSERT INTO nodes (name, tag, address, token, server_json, created_at, start_at, end_at, billing_cycle, next_remind_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		n.Name, n.Tag, n.Address, n.Token, n.ServerJSON, n.CreatedAt, n.StartAt, n.EndAt, n.BillingCycle, n.NextRemindAt,
 	)
 	if err != nil {
 		return model.Node{}, fmt.Errorf("create node: %w", err)
@@ -244,7 +253,7 @@ func (s *Store) CreateNode(n model.Node) (model.Node, error) {
 	return n, nil
 }
 
-const nodeColumns = `id, name, tag, address, token, server_json, created_at`
+const nodeColumns = `id, name, tag, address, token, server_json, created_at, start_at, end_at, billing_cycle, next_remind_at`
 
 // ListNodes returns all nodes ordered by id.
 func (s *Store) ListNodes() ([]model.Node, error) {
@@ -256,7 +265,7 @@ func (s *Store) ListNodes() ([]model.Node, error) {
 	var out []model.Node
 	for rows.Next() {
 		var n model.Node
-		if err := rows.Scan(&n.ID, &n.Name, &n.Tag, &n.Address, &n.Token, &n.ServerJSON, &n.CreatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.Name, &n.Tag, &n.Address, &n.Token, &n.ServerJSON, &n.CreatedAt, &n.StartAt, &n.EndAt, &n.BillingCycle, &n.NextRemindAt); err != nil {
 			return nil, err
 		}
 		out = append(out, n)
@@ -268,7 +277,7 @@ func (s *Store) ListNodes() ([]model.Node, error) {
 func (s *Store) GetNode(id int64) (model.Node, error) {
 	row := s.db.QueryRow(`SELECT `+nodeColumns+` FROM nodes WHERE id = ?`, id)
 	var n model.Node
-	err := row.Scan(&n.ID, &n.Name, &n.Tag, &n.Address, &n.Token, &n.ServerJSON, &n.CreatedAt)
+	err := row.Scan(&n.ID, &n.Name, &n.Tag, &n.Address, &n.Token, &n.ServerJSON, &n.CreatedAt, &n.StartAt, &n.EndAt, &n.BillingCycle, &n.NextRemindAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.Node{}, ErrNotFound
 	}
@@ -282,8 +291,17 @@ func (s *Store) UpdateNodeServer(id int64, serverJSON string) error {
 }
 
 // UpdateNodeDetails updates display metadata for a registered node.
-func (s *Store) UpdateNodeDetails(id int64, name, tag string) error {
-	_, err := s.db.Exec(`UPDATE nodes SET name = ?, tag = ? WHERE id = ?`, name, tag, id)
+func (s *Store) UpdateNodeDetails(id int64, name, tag string, startAt, endAt int64, billingCycle string) error {
+	_, err := s.db.Exec(
+		`UPDATE nodes SET name = ?, tag = ?, start_at = ?, end_at = ?, billing_cycle = ?, next_remind_at = 0 WHERE id = ?`,
+		name, tag, startAt, endAt, billingCycle, id,
+	)
+	return err
+}
+
+// UpdateNodeBilling advances billing dates and the next reminder marker.
+func (s *Store) UpdateNodeBilling(id int64, startAt, endAt, nextRemindAt int64) error {
+	_, err := s.db.Exec(`UPDATE nodes SET start_at = ?, end_at = ?, next_remind_at = ? WHERE id = ?`, startAt, endAt, nextRemindAt, id)
 	return err
 }
 

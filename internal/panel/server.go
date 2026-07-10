@@ -45,8 +45,9 @@ type Server struct {
 	pushedMu sync.Mutex
 	pushed   map[int64][32]byte
 
-	notifyMu   sync.Mutex
-	notifyLast map[string]time.Time
+	notifyMu      sync.Mutex
+	notifyLast    map[string]time.Time
+	notifyOffline map[int64]offlineNotificationState
 }
 
 // New builds a panel server from its bootstrap config, opening the client store.
@@ -76,7 +77,7 @@ func New(cfg Config) (*Server, error) {
 		}
 	}
 	return &Server{cfg: cfg, auth: a, tmpl: tmpl, prefix: "/" + cfg.PathPrefix, db: db,
-		notifyLast: map[string]time.Time{}, pushed: map[int64][32]byte{}}, nil
+		notifyLast: map[string]time.Time{}, notifyOffline: map[int64]offlineNotificationState{}, pushed: map[int64][32]byte{}}, nil
 }
 
 // Handler returns the routed, security-wrapped HTTP handler.
@@ -91,12 +92,14 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET "+p+"/dashboard", s.protected(s.handleDashboard))
 	mux.HandleFunc("GET "+p+"/dashboard/{view}", s.protected(s.handleDashboard))
+	mux.HandleFunc("GET "+p+"/public/monitoring", s.handlePublicMonitoring)
 	mux.HandleFunc("GET "+p+"/client/{id}", s.protected(s.handleClientDetail))
 	mux.HandleFunc("GET "+p+"/tools", s.protected(s.handleTools))
 	mux.HandleFunc("GET "+p+"/qr", s.protected(s.handleQR))
 	mux.HandleFunc("GET "+p+"/api/status", s.protected(s.handleStatus))
 	mux.HandleFunc("GET "+p+"/api/dashboard", s.protected(s.handleDashboardAPI))
 	mux.HandleFunc("GET "+p+"/api/logs", s.protected(s.handleLogs))
+	mux.HandleFunc("GET "+p+"/api/public/node-metrics", s.handlePublicNodeMetricsAPI)
 	mux.HandleFunc("POST "+p+"/api/service/{action}", s.protected(s.handleServiceAction))
 	mux.HandleFunc("GET "+p+"/api/notifications", s.protected(s.handleNotificationsGet))
 	mux.HandleFunc("POST "+p+"/api/notifications", s.protected(s.handleNotificationsSave))
@@ -104,6 +107,7 @@ func (s *Server) Handler() http.Handler {
 
 	// Client management.
 	mux.HandleFunc("POST "+p+"/api/clients", s.protected(s.handleClientCreate))
+	mux.HandleFunc("GET "+p+"/api/clients/devices", s.protected(s.handleClientDeviceCounts))
 	mux.HandleFunc("GET "+p+"/api/clients/{id}/devices", s.protected(s.handleClientDevices))
 	mux.HandleFunc("POST "+p+"/api/clients/{id}/devices/kick", s.protected(s.handleClientDeviceKick))
 	mux.HandleFunc("POST "+p+"/api/clients/{id}/{action}", s.protected(s.handleClientAction))
@@ -120,6 +124,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+p+"/api/node-metrics", s.protected(s.handleNodeMetricsAPI))
 	mux.HandleFunc("POST "+p+"/api/nodes", s.protected(s.handleNodeCreate))
 	mux.HandleFunc("POST "+p+"/api/nodes/{id}/update", s.protected(s.handleNodeUpdate))
+	mux.HandleFunc("POST "+p+"/api/nodes/{id}/renew", s.protected(s.handleNodeRenew))
 	mux.HandleFunc("POST "+p+"/api/nodes/{id}/delete", s.protected(s.handleNodeDelete))
 
 	// Subscription endpoint: token-authenticated (no login), for client apps.

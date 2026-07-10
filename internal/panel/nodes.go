@@ -187,27 +187,33 @@ func (s *Server) pollNodesOnce(ctx context.Context) {
 // ---- node management handlers (master side) ----
 
 type nodeRow struct {
-	ID          int64
-	Name        string
-	Tag         string
-	Address     string
-	Online      bool
-	CPU         string
-	CPUCores    int
-	Load1       float64
-	Load5       float64
-	Load15      float64
-	Mem         string
-	Disk        string
-	CPUPercent  float64
-	MemUsed     uint64
-	MemTotal    uint64
-	MemPercent  float64
-	DiskUsed    uint64
-	DiskTotal   uint64
-	DiskPercent float64
-	NetRxBytes  uint64
-	NetTxBytes  uint64
+	ID                int64
+	Name              string
+	Tag               string
+	Address           string
+	StartAt           int64
+	EndAt             int64
+	StartAtDate       string
+	EndAtDate         string
+	BillingCycle      string
+	BillingCycleLabel string
+	Online            bool
+	CPU               string
+	CPUCores          int
+	Load1             float64
+	Load5             float64
+	Load15            float64
+	Mem               string
+	Disk              string
+	CPUPercent        float64
+	MemUsed           uint64
+	MemTotal          uint64
+	MemPercent        float64
+	DiskUsed          uint64
+	DiskTotal         uint64
+	DiskPercent       float64
+	NetRxBytes        uint64
+	NetTxBytes        uint64
 }
 
 func (s *Server) handleNodesPage(w http.ResponseWriter, r *http.Request) {
@@ -238,6 +244,22 @@ func (s *Server) handleNodeMetricsAPI(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true, "nodes": rows})
 }
 
+func (s *Server) handlePublicMonitoring(w http.ResponseWriter, r *http.Request) {
+	s.render(w, "public_monitoring.html", map[string]any{"Prefix": s.prefix})
+}
+
+func (s *Server) handlePublicNodeMetricsAPI(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.nodeRows(r.Context())
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "读取节点失败"})
+		return
+	}
+	for i := range rows {
+		rows[i].Address = ""
+	}
+	writeJSON(w, map[string]any{"ok": true, "nodes": rows})
+}
+
 func (s *Server) nodeRows(ctx context.Context) ([]nodeRow, error) {
 	nodes, err := s.db.ListNodes()
 	if err != nil {
@@ -246,7 +268,12 @@ func (s *Server) nodeRows(ctx context.Context) ([]nodeRow, error) {
 	rows := make([]nodeRow, len(nodes))
 	var wg sync.WaitGroup
 	for i, n := range nodes {
-		rows[i] = nodeRow{ID: n.ID, Name: n.Name, Tag: n.Tag, Address: n.Address}
+		rows[i] = nodeRow{
+			ID: n.ID, Name: n.Name, Tag: n.Tag, Address: n.Address,
+			StartAt: n.StartAt, EndAt: n.EndAt,
+			StartAtDate: nodeDateInput(n.StartAt), EndAtDate: nodeDateInput(n.EndAt),
+			BillingCycle: n.BillingCycle, BillingCycleLabel: nodeBillingCycleLabel(n.BillingCycle),
+		}
 		wg.Add(1)
 		go func(i int, n model.Node) {
 			defer wg.Done()
@@ -287,6 +314,9 @@ func (s *Server) handleNodeCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	name := strings.TrimSpace(r.PostFormValue("name"))
 	tag := strings.TrimSpace(r.PostFormValue("tag"))
+	startAt := parseNodeDate(r.PostFormValue("start_at"))
+	endAt := parseNodeDate(r.PostFormValue("end_at"))
+	billingCycle := normalizeNodeBillingCycle(r.PostFormValue("billing_cycle"))
 
 	// Prefer a single access code; fall back to separate address/token fields.
 	var address, token string
@@ -323,6 +353,7 @@ func (s *Server) handleNodeCreate(w http.ResponseWriter, r *http.Request) {
 	node, err := s.db.CreateNode(model.Node{
 		Name: name, Tag: tag, Address: address, Token: token,
 		ServerJSON: string(serverJSON), CreatedAt: time.Now().Unix(),
+		StartAt: startAt, EndAt: endAt, BillingCycle: billingCycle,
 	})
 	if err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": "保存失败（名称可能重复）"})
@@ -379,15 +410,118 @@ func (s *Server) handleNodeUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	name := strings.TrimSpace(r.PostFormValue("name"))
 	tag := strings.TrimSpace(r.PostFormValue("tag"))
+	startAt := parseNodeDate(r.PostFormValue("start_at"))
+	endAt := parseNodeDate(r.PostFormValue("end_at"))
+	billingCycle := normalizeNodeBillingCycle(r.PostFormValue("billing_cycle"))
 	if name == "" {
 		writeJSON(w, map[string]any{"ok": false, "error": "节点名不能为空"})
 		return
 	}
-	if err := s.db.UpdateNodeDetails(id, name, tag); err != nil {
+	if err := s.db.UpdateNodeDetails(id, name, tag, startAt, endAt, billingCycle); err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true})
+}
+
+func (s *Server) handleNodeRenew(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "bad id"})
+		return
+	}
+	node, err := s.db.GetNode(id)
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "节点不存在"})
+		return
+	}
+	startAt, endAt, err := renewNodeBilling(node, time.Now())
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	if err := s.db.UpdateNodeBilling(node.ID, startAt, endAt, 0); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{
+		"ok":            true,
+		"start_at":      startAt,
+		"end_at":        endAt,
+		"start_at_date": nodeDateInput(startAt),
+		"end_at_date":   nodeDateInput(endAt),
+	})
+}
+
+func renewNodeBilling(node model.Node, now time.Time) (int64, int64, error) {
+	if node.EndAt <= 0 {
+		return 0, 0, fmt.Errorf("请先设置结束时间")
+	}
+	if normalizeNodeBillingCycle(node.BillingCycle) == "" {
+		return 0, 0, fmt.Errorf("请先设置续费周期")
+	}
+	startAt := node.EndAt
+	endAt := addNodeBillingCycle(time.Unix(startAt, 0).UTC(), node.BillingCycle).Unix()
+	if now.Unix() >= endAt {
+		for now.Unix() >= endAt {
+			startAt = endAt
+			endAt = addNodeBillingCycle(time.Unix(startAt, 0).UTC(), node.BillingCycle).Unix()
+			if endAt <= startAt {
+				return 0, 0, fmt.Errorf("续费周期无效")
+			}
+		}
+	}
+	if endAt <= startAt {
+		return 0, 0, fmt.Errorf("续费周期无效")
+	}
+	return startAt, endAt, nil
+}
+
+func parseNodeDate(s string) int64 {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0
+	}
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return 0
+	}
+	return t.Unix()
+}
+
+func nodeDateInput(ts int64) string {
+	if ts <= 0 {
+		return ""
+	}
+	return time.Unix(ts, 0).UTC().Format("2006-01-02")
+}
+
+func normalizeNodeBillingCycle(cycle string) string {
+	switch strings.TrimSpace(cycle) {
+	case "monthly", "quarterly", "half_year", "yearly", "two_years", "three_years":
+		return strings.TrimSpace(cycle)
+	default:
+		return ""
+	}
+}
+
+func nodeBillingCycleLabel(cycle string) string {
+	switch cycle {
+	case "monthly":
+		return "月"
+	case "quarterly":
+		return "季"
+	case "half_year":
+		return "半年"
+	case "yearly":
+		return "年"
+	case "two_years":
+		return "2 年"
+	case "three_years":
+		return "3 年"
+	default:
+		return "未设置"
+	}
 }
 
 // namedServer is a node's cached server settings plus its display name.

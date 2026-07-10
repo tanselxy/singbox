@@ -48,6 +48,27 @@ type clientDeviceRow struct {
 	Protocols     []string `json:"protocols"`
 }
 
+// handleClientDeviceCounts serves the list view with a single Clash API read,
+// rather than issuing one request for every client row.
+func (s *Server) handleClientDeviceCounts(w http.ResponseWriter, r *http.Request) {
+	clients, err := s.db.ListClients()
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "读取客户失败"})
+		return
+	}
+	connections, err := fetchClashConnections(r)
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+
+	counts := make(map[string]int, len(clients))
+	for _, client := range clients {
+		counts[strconv.FormatInt(client.ID, 10)] = len(groupClientDevices(connections, client.Name, client.QuotaBytes))
+	}
+	writeJSON(w, map[string]any{"ok": true, "counts": counts})
+}
+
 func (s *Server) handleClientDevices(w http.ResponseWriter, r *http.Request) {
 	c, err := s.clientFromPath(r)
 	if err != nil {

@@ -2,25 +2,24 @@ import { useEffect, useState } from "react";
 import { Badge, ModalFrame, PageHead } from "../components.jsx";
 import { VIEW_META } from "../constants.js";
 import { Button } from "../../ui/button.jsx";
-import { Card, CardContent } from "../../ui/card.jsx";
-import { Input, Textarea } from "../../ui/input.jsx";
+import { Input, Select, Textarea } from "../../ui/input.jsx";
 import { Label } from "../../ui/label.jsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../ui/table.jsx";
 import { cn } from "../../lib/utils.js";
 
-export function Monitoring({ prefix }) {
+export function Monitoring({ prefix, publicView = false, apiPath = "" }) {
   const [nodes, setNodes] = useState([]);
   const [mode, setMode] = useState("charts");
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingNode, setEditingNode] = useState(null);
-  const [nodeForm, setNodeForm] = useState({ code: "", name: "", tag: "" });
+  const [nodeForm, setNodeForm] = useState(defaultNodeForm());
   const [history, setHistory] = useState({});
   const [loading, setLoading] = useState(true);
 
   async function load() {
     try {
-      const res = await fetch(`${prefix}/api/node-metrics`);
+      const res = await fetch(apiPath || `${prefix}/api/node-metrics`);
       const payload = await res.json();
       if (payload.ok) {
         const nextNodes = (payload.nodes || []).map(normalizeNodeMetrics);
@@ -55,18 +54,28 @@ export function Monitoring({ prefix }) {
   }, []);
 
   function openCreateNode() {
+    if (publicView) return;
     setEditingNode(null);
-    setNodeForm({ code: "", name: "", tag: "" });
+    setNodeForm(defaultNodeForm());
     setOpen(true);
   }
 
   function openEditNode(node) {
+    if (publicView) return;
     setEditingNode(node);
-    setNodeForm({ code: "", name: node.Name || "", tag: node.Tag || "" });
+    setNodeForm({
+      code: "",
+      name: node.Name || "",
+      tag: node.Tag || "",
+      startAt: node.StartAtDate || "",
+      endAt: node.EndAtDate || "",
+      billingCycle: node.BillingCycle || "",
+    });
     setOpen(true);
   }
 
   async function submitNode() {
+    if (publicView) return;
     if (!editingNode && !nodeForm.code.trim()) {
       alert("请粘贴节点的接入码");
       return;
@@ -79,8 +88,8 @@ export function Monitoring({ prefix }) {
     try {
       const body = new URLSearchParams(
         editingNode
-          ? { name: nodeForm.name.trim(), tag: nodeForm.tag.trim() }
-          : { code: nodeForm.code.trim(), name: nodeForm.name.trim(), tag: nodeForm.tag.trim() },
+          ? nodeFormParams(nodeForm)
+          : { code: nodeForm.code.trim(), ...nodeFormParams(nodeForm) },
       );
       const url = editingNode ? `${prefix}/api/nodes/${editingNode.ID}/update` : `${prefix}/api/nodes`;
       const res = await fetch(url, { method: "POST", body });
@@ -90,7 +99,7 @@ export function Monitoring({ prefix }) {
         return;
       }
       if (payload.warn) alert(payload.warn);
-      setNodeForm({ code: "", name: "", tag: "" });
+      setNodeForm(defaultNodeForm());
       setEditingNode(null);
       setOpen(false);
       load();
@@ -101,7 +110,20 @@ export function Monitoring({ prefix }) {
     }
   }
 
+  async function renewNode(node) {
+    if (publicView) return;
+    if (!confirm(`确认已为「${node.Name}」续期？`)) return;
+    const res = await fetch(`${prefix}/api/nodes/${node.ID}/renew`, { method: "POST" });
+    const payload = await res.json();
+    if (!payload.ok) {
+      alert(`续期失败: ${payload.error || ""}`);
+      return;
+    }
+    load();
+  }
+
   async function deleteNode(node) {
+    if (publicView) return;
     if (!confirm(`确认删除节点「${node.Name}」？`)) return;
     const res = await fetch(`${prefix}/api/nodes/${node.ID}/delete`, { method: "POST" });
     const payload = await res.json();
@@ -133,33 +155,53 @@ export function Monitoring({ prefix }) {
                 onClick={() => setMode("table")}
               >表格</button>
             </div>
-            <Button onClick={openCreateNode}>+ 新增节点</Button>
+            {!publicView && <Button onClick={openCreateNode}>+ 新增节点</Button>}
           </div>
         }
       />
-      <Card>
-        <CardContent className="pt-6">
-          {mode === "charts" ? (
-            <MonitoringCharts nodes={nodes} history={history} loading={loading} onEdit={openEditNode} onDelete={deleteNode} />
-          ) : (
-            <MonitoringTable nodes={nodes} history={history} loading={loading} onEdit={openEditNode} onDelete={deleteNode} />
-          )}
-        </CardContent>
-      </Card>
-      <NodeDialog
-        open={open}
-        form={nodeForm}
-        saving={saving}
-        editing={Boolean(editingNode)}
-        onChange={setNodeForm}
-        onCancel={() => {
-          setOpen(false);
-          setEditingNode(null);
-        }}
-        onSubmit={submitNode}
-      />
+      {mode === "charts" ? (
+        <MonitoringCharts nodes={nodes} history={history} loading={loading} publicView={publicView} onEdit={openEditNode} onRenew={renewNode} onDelete={deleteNode} />
+      ) : (
+        <MonitoringTable nodes={nodes} history={history} loading={loading} publicView={publicView} onEdit={openEditNode} onRenew={renewNode} onDelete={deleteNode} />
+      )}
+      {!publicView && (
+        <NodeDialog
+          open={open}
+          form={nodeForm}
+          saving={saving}
+          editing={Boolean(editingNode)}
+          onChange={setNodeForm}
+          onCancel={() => {
+            setOpen(false);
+            setEditingNode(null);
+          }}
+          onSubmit={submitNode}
+        />
+      )}
     </>
   );
+}
+
+function defaultNodeForm() {
+  const startAt = dateInput(new Date());
+  return {
+    code: "",
+    name: "",
+    tag: "",
+    startAt,
+    endAt: dateInput(addMonths(new Date(), 1)),
+    billingCycle: "monthly",
+  };
+}
+
+function nodeFormParams(form) {
+  return {
+    name: form.name.trim(),
+    tag: form.tag.trim(),
+    start_at: form.startAt,
+    end_at: form.endAt,
+    billing_cycle: form.billingCycle,
+  };
 }
 
 function NodeDialog({ open, form, saving, editing, onChange, onCancel, onSubmit }) {
@@ -186,6 +228,25 @@ function NodeDialog({ open, form, saving, editing, onChange, onCancel, onSubmit 
       </Label>
       <Label>标签 / 用途
         <Input value={form.tag} onChange={(e) => onChange({ ...form, tag: e.target.value })} placeholder="例如：荷兰中转、流媒体、备用节点" />
+      </Label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Label>开始时间
+          <Input value={form.startAt} onChange={(e) => onChange({ ...form, startAt: e.target.value })} type="date" />
+        </Label>
+        <Label>结束时间
+          <Input value={form.endAt} onChange={(e) => onChange({ ...form, endAt: e.target.value })} type="date" />
+        </Label>
+      </div>
+      <Label>续费周期
+        <Select value={form.billingCycle} onChange={(e) => onChange({ ...form, billingCycle: e.target.value })}>
+          <option value="">不自动续期</option>
+          <option value="monthly">月</option>
+          <option value="quarterly">季</option>
+          <option value="half_year">半年</option>
+          <option value="yearly">年</option>
+          <option value="two_years">2 年</option>
+          <option value="three_years">3 年</option>
+        </Select>
       </Label>
     </ModalFrame>
   );
@@ -217,27 +278,28 @@ function parsePercent(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
-function MonitoringCharts({ nodes, history, loading, onEdit, onDelete }) {
+function MonitoringCharts({ nodes, history, loading, publicView, onEdit, onRenew, onDelete }) {
   if (nodes.length === 0) {
     return <div className="py-10 text-center text-sm text-muted-foreground">{loading ? "正在读取节点指标。" : "还没有受控节点。"}</div>;
   }
   return (
     <div className="grid items-start gap-4 md:grid-cols-[repeat(auto-fill,minmax(360px,560px))]">
       {nodes.map((node) => (
-        <NodeMetricCard key={node.ID} node={node} history={history[node.ID] || []} onEdit={onEdit} onDelete={onDelete} />
+        <NodeMetricCard key={node.ID} node={node} history={history[node.ID] || []} publicView={publicView} onEdit={onEdit} onRenew={onRenew} onDelete={onDelete} />
       ))}
     </div>
   );
 }
 
-function NodeMetricCard({ node, history, onEdit, onDelete }) {
+function NodeMetricCard({ node, history, publicView, onEdit, onRenew, onDelete }) {
   const rates = networkRates(history);
+  const tags = splitTags(node.Tag);
   return (
     <div className="w-full max-w-xl rounded-xl border bg-card p-4 shadow-sm">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h4 className="truncate font-medium">{node.Name}</h4>
-          <p className="truncate font-mono text-xs text-muted-foreground">{node.Address}</p>
+          {!publicView && <p className="truncate font-mono text-xs text-muted-foreground">{node.Address}</p>}
         </div>
         <Badge active={node.Online}>{node.Online ? "在线" : "离线"}</Badge>
       </div>
@@ -253,14 +315,24 @@ function NodeMetricCard({ node, history, onEdit, onDelete }) {
         <MiniMetric label="出站累计" value={formatBytes(node.NetTxBytes)} />
         <MiniMetric label="入站累计" value={formatBytes(node.NetRxBytes)} />
       </div>
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <Button size="sm" variant="secondary" onClick={() => onEdit(node)}>
-          {node.Tag || "添加标签"}
-        </Button>
-        <div className="flex gap-1">
-          <Button size="sm" variant="outline" onClick={() => onEdit(node)}>编辑</Button>
-          <Button size="sm" variant="destructive" onClick={() => onDelete(node)}>删除</Button>
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        {node.StartAtDate && <span>开始 {node.StartAtDate}</span>}
+        {node.EndAtDate && <span>续费 {node.EndAtDate}</span>}
+        {node.BillingCycleLabel && node.BillingCycleLabel !== "未设置" && <span>周期 {node.BillingCycleLabel}</span>}
+      </div>
+      <div className="mt-4 flex items-end justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {tags.length > 0 ? tags.map((tag) => <TagBadge key={tag}>{tag}</TagBadge>) : (
+            !publicView && <Button size="sm" variant="secondary" onClick={() => onEdit(node)}>添加标签</Button>
+          )}
         </div>
+        {!publicView && (
+          <div className="flex flex-wrap justify-end gap-1">
+            <Button size="sm" variant="secondary" onClick={() => onRenew(node)} disabled={!node.EndAtDate || !node.BillingCycle}>续期</Button>
+            <Button size="sm" variant="outline" onClick={() => onEdit(node)}>编辑</Button>
+            <Button size="sm" variant="destructive" onClick={() => onDelete(node)}>删除</Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -292,13 +364,17 @@ function MiniMetric({ label, value }) {
   );
 }
 
-function MonitoringTable({ nodes, history, loading, onEdit, onDelete }) {
+function TagBadge({ children }) {
+  return <span className="rounded-md bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">{children}</span>;
+}
+
+function MonitoringTable({ nodes, history, loading, publicView, onEdit, onRenew, onDelete }) {
   return (
     <Table>
       <TableHeader>
         <TableRow>
           <TableHead>节点</TableHead>
-          <TableHead>地址</TableHead>
+          {!publicView && <TableHead>地址</TableHead>}
           <TableHead>状态</TableHead>
           <TableHead>CPU</TableHead>
           <TableHead>负载</TableHead>
@@ -306,19 +382,21 @@ function MonitoringTable({ nodes, history, loading, onEdit, onDelete }) {
           <TableHead>硬盘</TableHead>
           <TableHead>上行</TableHead>
           <TableHead>下行</TableHead>
-          <TableHead>操作</TableHead>
+          <TableHead>标签</TableHead>
+          <TableHead>续费</TableHead>
+          {!publicView && <TableHead>操作</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
         {nodes.length === 0 && (
-          <TableRow><TableCell colSpan="10" className="text-muted-foreground">{loading ? "正在读取节点指标。" : "还没有受控节点。"}</TableCell></TableRow>
+          <TableRow><TableCell colSpan={publicView ? "10" : "12"} className="text-muted-foreground">{loading ? "正在读取节点指标。" : "还没有受控节点。"}</TableCell></TableRow>
         )}
         {nodes.map((node) => {
           const rates = networkRates(history[node.ID] || []);
           return (
             <TableRow key={node.ID}>
               <TableCell>{node.Name}</TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">{node.Address}</TableCell>
+              {!publicView && <TableCell className="font-mono text-xs text-muted-foreground">{node.Address}</TableCell>}
               <TableCell><Badge active={node.Online}>{node.Online ? "在线" : "离线"}</Badge></TableCell>
               <TableCell>{node.CPU || "-"}</TableCell>
               <TableCell>{formatLoad(node.Load1)}</TableCell>
@@ -327,11 +405,20 @@ function MonitoringTable({ nodes, history, loading, onEdit, onDelete }) {
               <TableCell>{rates.upRate}</TableCell>
               <TableCell>{rates.downRate}</TableCell>
               <TableCell>
-                <div className="flex gap-1">
-                  <Button size="sm" variant="outline" onClick={() => onEdit(node)}>编辑</Button>
-                  <Button size="sm" variant="destructive" onClick={() => onDelete(node)}>删除</Button>
+                <div className="flex flex-wrap gap-1">
+                  {splitTags(node.Tag).map((tag) => <TagBadge key={tag}>{tag}</TagBadge>)}
                 </div>
               </TableCell>
+              <TableCell>{node.EndAtDate ? `${node.EndAtDate} / ${node.BillingCycleLabel}` : "-"}</TableCell>
+              {!publicView && (
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="secondary" onClick={() => onRenew(node)} disabled={!node.EndAtDate || !node.BillingCycle}>续期</Button>
+                    <Button size="sm" variant="outline" onClick={() => onEdit(node)}>编辑</Button>
+                    <Button size="sm" variant="destructive" onClick={() => onDelete(node)}>删除</Button>
+                  </div>
+                </TableCell>
+              )}
             </TableRow>
           );
         })}
@@ -358,6 +445,26 @@ function loadPercent(node) {
 function formatLoad(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number.toFixed(2) : "-";
+}
+
+function splitTags(value) {
+  return String(value || "")
+    .split(/[,，、\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function dateInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addMonths(date, months) {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  return next;
 }
 
 function formatBytes(value) {

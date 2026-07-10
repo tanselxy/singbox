@@ -27,6 +27,7 @@ import (
 type clientRow struct {
 	ID            int64
 	Name          string
+	SubToken      string
 	Enabled       bool
 	Used          string
 	Quota         string
@@ -74,14 +75,15 @@ type nodeView struct {
 }
 
 type clientDetailData struct {
-	Prefix  string
-	Client  model.Client
-	Nodes   []nodeView
-	SubURL  string
-	Used    string
-	Quota   string
-	Devices string
-	Expiry  string
+	Prefix      string
+	Client      model.Client
+	Nodes       []nodeView
+	SubURL      string
+	ClashSubURL string
+	Used        string
+	Quota       string
+	Devices     string
+	Expiry      string
 }
 
 // ---- auth pages ----
@@ -183,6 +185,7 @@ func (s *Server) dashboardData(ctx context.Context) (dashboardData, error) {
 		rows = append(rows, clientRow{
 			ID:            c.ID,
 			Name:          c.Name,
+			SubToken:      c.SubToken,
 			Enabled:       c.Enabled,
 			Used:          humanBytes(used),
 			Quota:         quotaLabel(c.QuotaBytes),
@@ -290,17 +293,20 @@ func (s *Server) handleClientDetail(w http.ResponseWriter, r *http.Request) {
 		appendLinks(ns.Server, ns.Name)
 	}
 	tr, _ := s.db.GetTraffic(c.ID)
+	subBase := fmt.Sprintf("http://%s%s/sub/%s", r.Host, s.prefix, c.SubToken)
+	subName := url.QueryEscape(c.Name)
 	s.render(w, "client.html", clientDetailData{
 		Prefix: s.prefix,
 		Client: c,
 		Nodes:  nodes,
 		// http, not https: proxy apps reject the panel's self-signed cert, and
 		// the plain-HTTP side of the listener serves only this endpoint.
-		SubURL:  fmt.Sprintf("http://%s%s/sub/%s#%s", r.Host, s.prefix, c.SubToken, url.QueryEscape(c.Name)),
-		Used:    humanBytes(tr.Up + tr.Down),
-		Quota:   quotaLabel(c.QuotaBytes),
-		Devices: deviceLabel(c.DeviceLimit),
-		Expiry:  expiryLabel(c.ExpiresAt),
+		SubURL:      subBase + "#" + subName,
+		ClashSubURL: subBase + "?target=clash#" + subName,
+		Used:        humanBytes(tr.Up + tr.Down),
+		Quota:       quotaLabel(c.QuotaBytes),
+		Devices:     deviceLabel(c.DeviceLimit),
+		Expiry:      expiryLabel(c.ExpiresAt),
 	})
 }
 
@@ -442,6 +448,11 @@ func (s *Server) handleSubscription(w http.ResponseWriter, r *http.Request) {
 	body := strings.Join(lines, "\n")
 	s.writeSubscriptionHeaders(w, c)
 
+	if wantsClashSubscription(r) {
+		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+		_, _ = w.Write([]byte(clashSubscription(srv, nodes, c)))
+		return
+	}
 	if r.URL.Query().Get("target") == "raw" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte(body))
@@ -450,6 +461,19 @@ func (s *Server) handleSubscription(w http.ResponseWriter, r *http.Request) {
 	// Default: base64 (v2rayN/Shadowrocket style).
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write([]byte(base64.StdEncoding.EncodeToString([]byte(body))))
+}
+
+func wantsClashSubscription(r *http.Request) bool {
+	target := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("target")))
+	format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
+	if target == "raw" {
+		return false
+	}
+	if target == "clash" || target == "clashverge" || target == "mihomo" || format == "clash" || format == "yaml" || format == "yml" {
+		return true
+	}
+	ua := strings.ToLower(r.UserAgent())
+	return strings.Contains(ua, "clash") || strings.Contains(ua, "mihomo")
 }
 
 func (s *Server) writeSubscriptionHeaders(w http.ResponseWriter, c model.Client) {

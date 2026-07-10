@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>实时监控</title>
+  <link rel="stylesheet" href="{{.Prefix}}/static/dashboard.css">
+</head>
+<body data-prefix="{{.Prefix}}" class="bg-background text-foreground antialiased">
+  <div id="public-monitoring-root" data-prefix="{{.Prefix}}">
+    <div class="p-6 text-sm text-muted-foreground">
+      正在加载监控数据…
+      <noscript><span class="text-destructive"> 浏览器需要启用 JavaScript 才能查看监控数据。</span></noscript>
+    </div>
+  </div>
+
+  <script src="{{.Prefix}}/static/dashboard-react.js"></script>
+</body>
+</html>

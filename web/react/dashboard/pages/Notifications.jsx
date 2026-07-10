@@ -11,6 +11,7 @@ const DEFAULT_CONFIG = {
   telegram_bot_token: "",
   telegram_chat_id: "",
   notify_node_offline: true,
+  offline_repeat_hours: 0,
   notify_cpu: true,
   cpu_threshold: 85,
   notify_memory: true,
@@ -132,6 +133,17 @@ export function Notifications({ prefix }) {
               checked={config.notify_node_offline}
               onChange={(checked) => update({ notify_node_offline: checked })}
             />
+            <Label>持续离线重复提醒（小时）
+              <Input
+                value={config.offline_repeat_hours}
+                onChange={(e) => update({ offline_repeat_hours: Number(e.target.value) })}
+                type="number"
+                min="0"
+                max="720"
+                disabled={!config.notify_node_offline}
+                placeholder="0 = 不重复提醒"
+              />
+            </Label>
             <ThresholdRow
               label="CPU"
               enabled={config.notify_cpu}
@@ -153,7 +165,7 @@ export function Notifications({ prefix }) {
               onEnabled={(checked) => update({ notify_disk: checked })}
               onValue={(value) => update({ disk_threshold: value })}
             />
-            <Label>通知冷却（分钟）
+            <Label>指标通知冷却（分钟）
               <Input
                 value={config.cooldown_minutes}
                 onChange={(e) => update({ cooldown_minutes: Number(e.target.value) })}

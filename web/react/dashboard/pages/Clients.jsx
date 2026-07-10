@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Ellipsis } from "lucide-react";
 import { Badge, ModalFrame, PageHead } from "../components.jsx";
 import { VIEW_META } from "../constants.js";
 import { Button } from "../../ui/button.jsx";
@@ -18,8 +19,36 @@ export function Clients({ data, refresh, prefix }) {
   const [devicesLoading, setDevicesLoading] = useState(false);
   const [devices, setDevices] = useState([]);
   const [deviceUsage, setDeviceUsage] = useState(null);
+  const [deviceCounts, setDeviceCounts] = useState({});
+  const [deviceCountsLoading, setDeviceCountsLoading] = useState(true);
+  const [deviceCountsAvailable, setDeviceCountsAvailable] = useState(false);
   const [form, setForm] = useState(EMPTY_CLIENT_FORM);
   const clients = data.Clients || [];
+
+  useEffect(() => {
+    let active = true;
+    async function loadDeviceCounts() {
+      setDeviceCountsLoading(true);
+      try {
+        const res = await fetch(`${prefix}/api/clients/devices`);
+        const payload = await res.json();
+        if (active && payload.ok) {
+          setDeviceCounts(payload.counts || {});
+          setDeviceCountsAvailable(true);
+        }
+      } catch {
+        // The device detail dialog exposes the specific Clash API error on demand.
+      } finally {
+        if (active) setDeviceCountsLoading(false);
+      }
+    }
+    loadDeviceCounts();
+    const refreshTimer = window.setInterval(loadDeviceCounts, 15000);
+    return () => {
+      active = false;
+      window.clearInterval(refreshTimer);
+    };
+  }, [prefix, clients.length]);
 
   function openCreate() {
     setEditingClient(null);
@@ -81,6 +110,26 @@ export function Clients({ data, refresh, prefix }) {
     refresh();
   }
 
+  function subscriptionURL(client) {
+    const token = client.SubToken || "";
+    if (!token) return "";
+    return `http://${window.location.host}${prefix}/sub/${encodeURIComponent(token)}#${encodeURIComponent(client.Name || "")}`;
+  }
+
+  async function copySubscription(client) {
+    const url = subscriptionURL(client);
+    if (!url) {
+      alert("订阅信息缺失，请刷新页面后重试");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      alert("订阅链接已复制");
+    } catch {
+      prompt("复制订阅链接", url);
+    }
+  }
+
   async function openDevices(client) {
     setDevicesClient(client);
     setDevices([]);
@@ -96,6 +145,7 @@ export function Clients({ data, refresh, prefix }) {
       }
       setDevices(payload.devices || []);
       setDeviceUsage(payload.client || null);
+      setDeviceCounts((current) => ({ ...current, [client.ID]: (payload.devices || []).length }));
     } finally {
       setDevicesLoading(false);
     }
@@ -111,6 +161,13 @@ export function Clients({ data, refresh, prefix }) {
       return;
     }
     await openDevices(devicesClient);
+  }
+
+  function deviceLabel(client) {
+    if (deviceCountsLoading && deviceCounts[client.ID] === undefined) return "读取中...";
+    if (!deviceCountsAvailable) return "暂不可用";
+    const count = deviceCounts[client.ID] ?? 0;
+    return `${count} 台在线`;
   }
 
   return (
@@ -145,18 +202,25 @@ export function Clients({ data, refresh, prefix }) {
                   <TableCell><Badge active={client.Enabled}>{client.Enabled ? "启用" : "停用"}</Badge></TableCell>
                   <TableCell className={client.OverQuota ? "text-destructive" : ""}>{client.Used}</TableCell>
                   <TableCell>{client.Quota}</TableCell>
-                  <TableCell>{client.Devices}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 text-xs"
+                      onClick={() => openDevices(client)}
+                      title="查看当前在线设备"
+                    >
+                      {deviceLabel(client)}
+                    </Button>
+                    <div className="mt-1 text-xs text-muted-foreground">限制：{client.Devices}</div>
+                  </TableCell>
                   <TableCell className={client.Expired ? "text-destructive" : ""}>{client.Expiry}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1.5">
                       <Button variant="outline" size="sm" onClick={() => openEdit(client)}>编辑</Button>
-                      <Button variant="outline" size="sm" onClick={() => clientAction(client, client.Enabled ? "disable" : "enable")}>
-                        {client.Enabled ? "停用" : "启用"}
-                      </Button>
                       <Button variant="outline" size="sm" onClick={() => clientAction(client, "reset-subscription")}>重置订阅</Button>
-                      <Button variant="outline" size="sm" onClick={() => openDevices(client)}>设备</Button>
-                      <Button variant="outline" size="sm" onClick={() => clientAction(client, "reset-traffic")}>清零流量</Button>
-                      <Button variant="destructive" size="sm" onClick={() => clientAction(client, "delete")}>删除</Button>
+                      <Button variant="outline" size="sm" onClick={() => copySubscription(client)}>复制订阅</Button>
+                      <ClientActionsMenu client={client} onAction={clientAction} />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -189,6 +253,47 @@ export function Clients({ data, refresh, prefix }) {
         onCancel={() => setDevicesOpen(false)}
       />
     </>
+  );
+}
+
+function ClientActionsMenu({ client, onAction }) {
+  const [open, setOpen] = useState(false);
+
+  function run(action) {
+    setOpen(false);
+    onAction(client, action);
+  }
+
+  return (
+    <div
+      className="relative"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      }}
+    >
+      <Button
+        variant="outline"
+        size="icon"
+        aria-label="更多客户操作"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <Ellipsis />
+      </Button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-1 w-32 rounded-md border bg-popover p-1 text-popover-foreground shadow-md" role="menu">
+          <button className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent" role="menuitem" onClick={() => run(client.Enabled ? "disable" : "enable")}>
+            {client.Enabled ? "停用" : "启用"}
+          </button>
+          <button className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent" role="menuitem" onClick={() => run("reset-traffic")}>
+            清零流量
+          </button>
+          <button className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm text-destructive hover:bg-destructive/10" role="menuitem" onClick={() => run("delete")}>
+            删除
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

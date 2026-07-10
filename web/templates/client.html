@@ -32,7 +32,13 @@
         <button class="copy inline-flex h-8 items-center rounded-md border px-3 text-sm hover:bg-accent cursor-pointer" data-url="{{.SubURL}}">复制</button>
       </div>
       <textarea class="mt-2 w-full rounded-md border bg-transparent px-3 py-2 font-mono text-xs" readonly rows="2">{{.SubURL}}</textarea>
-      <p class="mt-2 text-sm text-muted-foreground">导入到 v2rayN / Shadowrocket / sing-box 等客户端（base64 订阅）。追加 <span class="font-mono">?target=raw</span> 可得明文链接列表。</p>
+      <p class="mt-2 text-sm text-muted-foreground">导入到 v2rayN / Shadowrocket / sing-box 等客户端。追加 <span class="font-mono">?target=raw</span> 可得明文链接列表。</p>
+
+      <div class="mt-5 flex items-center justify-between">
+        <h3 class="text-base font-semibold">Clash Verge 链接</h3>
+        <button class="copy inline-flex h-8 items-center rounded-md border px-3 text-sm hover:bg-accent cursor-pointer" data-url="{{.ClashSubURL}}">复制</button>
+      </div>
+      <textarea class="mt-2 w-full rounded-md border bg-transparent px-3 py-2 font-mono text-xs" readonly rows="2">{{.ClashSubURL}}</textarea>
     </section>
 
     <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
