@@ -165,8 +165,10 @@ func TestSubscriptionByToken(t *testing.T) {
 	if !strings.Contains(string(decoded), "vless://") {
 		t.Error("decoded subscription should contain node links")
 	}
-	if got := resp.Header.Get("Subscription-Userinfo"); !strings.Contains(got, "upload=") || !strings.Contains(got, "download=") || !strings.Contains(got, "total=") {
-		t.Fatalf("subscription should include traffic header, got %q", got)
+	if got := resp.Header.Get("Subscription-Userinfo"); strings.Contains(got, "upload=") || strings.Contains(got, "download=") || strings.Contains(got, "total=") {
+		t.Fatalf("subscription traffic header should be human-readable, got %q", got)
+	} else if !strings.Contains(got, "当前已使用") || !strings.Contains(got, "流量总额度") {
+		t.Fatalf("subscription should include human traffic header, got %q", got)
 	}
 	if got := resp.Header.Get("Profile-Title"); got == "" {
 		t.Fatal("subscription should include profile title")

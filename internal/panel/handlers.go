@@ -455,16 +455,8 @@ func (s *Server) handleSubscription(w http.ResponseWriter, r *http.Request) {
 func (s *Server) writeSubscriptionHeaders(w http.ResponseWriter, c model.Client) {
 	tr, _ := s.db.GetTraffic(c.ID)
 	used := tr.Up + tr.Down
-	parts := []string{
-		fmt.Sprintf("upload=%d", tr.Up),
-		fmt.Sprintf("download=%d", tr.Down),
-		fmt.Sprintf("total=%d", c.QuotaBytes),
-	}
-	if c.ExpiresAt > 0 {
-		parts = append(parts, fmt.Sprintf("expire=%d", c.ExpiresAt))
-	}
 	display := subscriptionUsageTitle(used, c.QuotaBytes)
-	w.Header().Set("Subscription-Userinfo", strings.Join(parts, "; "))
+	w.Header().Set("Subscription-Userinfo", display)
 	w.Header().Set("Profile-Title", url.QueryEscape(display))
 	w.Header().Set("Profile-Update-Interval", "24")
 	w.Header().Set("X-Subscription-Usage", display)
