@@ -30,6 +30,9 @@ type Server struct {
 
 	db *store.Store
 
+	// accountMu keeps credential reads and account updates consistent.
+	accountMu sync.RWMutex
+
 	// applyMu serializes config regeneration + sing-box restart so concurrent
 	// client edits cannot interleave. It also guards pollerCancel and cfg.Managed.
 	applyMu sync.Mutex
@@ -44,6 +47,11 @@ type Server struct {
 	// converge. Guarded by pushedMu.
 	pushedMu sync.Mutex
 	pushed   map[int64][32]byte
+
+	// nodeMetrics holds the last background probe result for each node. HTTP
+	// handlers read this cache only, so a slow node never delays page rendering.
+	metricsMu   sync.RWMutex
+	nodeMetrics map[int64]nodeMetricSnapshot
 
 	notifyMu      sync.Mutex
 	notifyLast    map[string]time.Time
@@ -77,7 +85,8 @@ func New(cfg Config) (*Server, error) {
 		}
 	}
 	return &Server{cfg: cfg, auth: a, tmpl: tmpl, prefix: "/" + cfg.PathPrefix, db: db,
-		notifyLast: map[string]time.Time{}, notifyOffline: map[int64]offlineNotificationState{}, pushed: map[int64][32]byte{}}, nil
+		notifyLast: map[string]time.Time{}, notifyOffline: map[int64]offlineNotificationState{}, pushed: map[int64][32]byte{},
+		nodeMetrics: map[int64]nodeMetricSnapshot{}}, nil
 }
 
 // Handler returns the routed, security-wrapped HTTP handler.
@@ -89,6 +98,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+p+"/login", s.handleLoginPage)
 	mux.HandleFunc("POST "+p+"/login", s.handleLogin)
 	mux.HandleFunc("POST "+p+"/logout", s.handleLogout)
+	mux.HandleFunc("POST "+p+"/api/account", s.protected(s.handleAccountUpdate))
 
 	mux.HandleFunc("GET "+p+"/dashboard", s.protected(s.handleDashboard))
 	mux.HandleFunc("GET "+p+"/dashboard/{view}", s.protected(s.handleDashboard))
@@ -113,6 +123,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST "+p+"/api/clients/{id}/{action}", s.protected(s.handleClientAction))
 
 	// System optimization / security.
+	mux.HandleFunc("GET "+p+"/api/system/fail2ban/bans", s.protected(s.handleFail2banBans))
 	mux.HandleFunc("POST "+p+"/api/system/{action}", s.protected(s.handleSystemAction))
 
 	// Version check / in-panel upgrade.
@@ -179,6 +190,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 	// Master side: poll registered remote nodes for traffic + accumulate.
 	go s.runNodePoller(ctx, enforce)
+	go s.runNodeMetricsPoller(ctx)
 	go s.runNotificationPoller(ctx)
 
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", s.cfg.Port))

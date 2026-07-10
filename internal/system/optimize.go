@@ -11,6 +11,27 @@ import (
 
 const sysctlFile = "/etc/sysctl.d/99-singbox.conf"
 
+const managedFail2banJail = `# Managed by singbox-panel
+[DEFAULT]
+bantime = -1
+findtime = 86400
+maxretry = 10
+ignoreip = 127.0.0.1/8 ::1
+
+[sshd]
+enabled = true
+`
+
+const legacyFail2banJail = `[DEFAULT]
+bantime = -1
+findtime = 86400
+maxretry = 10
+ignoreip = 127.0.0.1/8 ::1
+
+[sshd]
+enabled = true
+`
+
 // sysctlTuning enables BBR congestion control and a few TCP tweaks that improve
 // proxy throughput and latency. Written to a dedicated drop-in so re-applying is
 // idempotent (the file is simply overwritten).
@@ -46,25 +67,50 @@ func SetupFail2ban(ctx context.Context, mgr PackageManager) error {
 	if err := installFail2ban(ctx, mgr); err != nil {
 		return err
 	}
-	const jail = `[DEFAULT]
-bantime = -1
-findtime = 86400
-maxretry = 10
-ignoreip = 127.0.0.1/8 ::1
-
-[sshd]
-enabled = true
-`
 	if err := os.MkdirAll("/etc/fail2ban", 0o755); err != nil {
 		return fmt.Errorf("create fail2ban dir: %w", err)
 	}
-	if err := os.WriteFile("/etc/fail2ban/jail.local", []byte(jail), 0o644); err != nil {
+	if err := os.WriteFile("/etc/fail2ban/jail.local", []byte(managedFail2banJail), 0o644); err != nil {
 		return fmt.Errorf("write jail.local: %w", err)
 	}
 	if err := Run(ctx, "systemctl", "enable", "fail2ban"); err != nil {
 		return err
 	}
 	return Run(ctx, "systemctl", "restart", "fail2ban")
+}
+
+// RemoveFail2ban stops and removes fail2ban. Only the jail configuration
+// created by this panel is deleted; a user-modified jail.local is preserved.
+func RemoveFail2ban(ctx context.Context, mgr PackageManager) error {
+	_ = Run(ctx, "systemctl", "disable", "--now", "fail2ban")
+	if err := removeManagedFail2banJail(); err != nil {
+		return err
+	}
+	switch mgr {
+	case APT:
+		return Run(ctx, "apt-get", "remove", "-y", "fail2ban")
+	default:
+		return Run(ctx, string(mgr), "remove", "-y", "fail2ban")
+	}
+}
+
+func removeManagedFail2banJail() error {
+	const jailPath = "/etc/fail2ban/jail.local"
+	data, err := os.ReadFile(jailPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read jail.local: %w", err)
+	}
+	content := strings.TrimSpace(string(data))
+	if content != strings.TrimSpace(managedFail2banJail) && content != strings.TrimSpace(legacyFail2banJail) {
+		return nil
+	}
+	if err := os.Remove(jailPath); err != nil {
+		return fmt.Errorf("remove jail.local: %w", err)
+	}
+	return nil
 }
 
 func installFail2ban(ctx context.Context, mgr PackageManager) error {
@@ -84,6 +130,61 @@ func installFail2ban(ctx context.Context, mgr PackageManager) error {
 func Fail2banActive(ctx context.Context) bool {
 	out, err := Output(ctx, "systemctl", "is-active", "fail2ban")
 	return err == nil && out == "active"
+}
+
+// Fail2banInstalled reports whether the fail2ban command is available on the host.
+func Fail2banInstalled() bool { return LookPath("fail2ban-client") }
+
+type Fail2banBan struct {
+	IP     string `json:"ip"`
+	Jail   string `json:"jail"`
+	Status string `json:"status"`
+}
+
+type Fail2banBans struct {
+	Bans     []Fail2banBan `json:"bans"`
+	Page     int           `json:"page"`
+	PageSize int           `json:"page_size"`
+	Total    int           `json:"total"`
+}
+
+// ListFail2banBans returns the currently banned IPs from the sshd jail.
+func ListFail2banBans(ctx context.Context, page, pageSize int) (Fail2banBans, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 25
+	}
+	out, err := Output(ctx, "fail2ban-client", "status", "sshd")
+	if err != nil {
+		return Fail2banBans{}, fmt.Errorf("读取 fail2ban 封禁列表: %w", err)
+	}
+	ips := parseFail2banBannedIPs(out)
+	start := (page - 1) * pageSize
+	if start > len(ips) {
+		start = len(ips)
+	}
+	end := start + pageSize
+	if end > len(ips) {
+		end = len(ips)
+	}
+	bans := make([]Fail2banBan, 0, end-start)
+	for _, ip := range ips[start:end] {
+		bans = append(bans, Fail2banBan{IP: ip, Jail: "sshd", Status: "当前封禁"})
+	}
+	return Fail2banBans{Bans: bans, Page: page, PageSize: pageSize, Total: len(ips)}, nil
+}
+
+func parseFail2banBannedIPs(status string) []string {
+	for _, line := range strings.Split(status, "\n") {
+		label, value, found := strings.Cut(line, "Banned IP list:")
+		if !found || label == "" {
+			continue
+		}
+		return strings.Fields(value)
+	}
+	return nil
 }
 
 const sshdConfigPath = "/etc/ssh/sshd_config"

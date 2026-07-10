@@ -46,8 +46,16 @@ func decodeAccessCode(code string) (address, token string, err error) {
 	return address, token, nil
 }
 
-// nodePollInterval is how often the master polls remote nodes for traffic.
-const nodePollInterval = 30 * time.Second
+const (
+	// nodePollInterval is how often the master polls remote nodes for traffic.
+	nodePollInterval = 30 * time.Second
+
+	// Node metrics are collected in the background and served from memory so
+	// opening the monitoring page never waits for remote machines.
+	nodeMetricsPollInterval   = 5 * time.Second
+	nodeMetricsRequestTimeout = 3 * time.Second
+	nodeMetricsWorkers        = 16
+)
 
 // clientSetHash fingerprints a client set for the per-node push ledger.
 func clientSetHash(clients []model.Client) [32]byte {
@@ -198,6 +206,8 @@ type nodeRow struct {
 	BillingCycle      string
 	BillingCycleLabel string
 	Online            bool
+	Pending           bool
+	SampledAt         int64
 	CPU               string
 	CPUCores          int
 	Load1             float64
@@ -214,6 +224,12 @@ type nodeRow struct {
 	DiskPercent       float64
 	NetRxBytes        uint64
 	NetTxBytes        uint64
+}
+
+type nodeMetricSnapshot struct {
+	metrics   metrics.System
+	online    bool
+	sampledAt int64
 }
 
 func (s *Server) handleNodesPage(w http.ResponseWriter, r *http.Request) {
@@ -260,51 +276,124 @@ func (s *Server) handlePublicNodeMetricsAPI(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, map[string]any{"ok": true, "nodes": rows})
 }
 
-func (s *Server) nodeRows(ctx context.Context) ([]nodeRow, error) {
+// runNodeMetricsPoller continuously refreshes metrics without coupling it to
+// browser requests. A failed sample is isolated to that node's cached status.
+func (s *Server) runNodeMetricsPoller(ctx context.Context) {
+	s.pollNodeMetricsOnce(ctx)
+	ticker := time.NewTicker(nodeMetricsPollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.pollNodeMetricsOnce(ctx)
+		}
+	}
+}
+
+func (s *Server) pollNodeMetricsOnce(ctx context.Context) {
+	nodes, err := s.db.ListNodes()
+	if err != nil {
+		return
+	}
+	type result struct {
+		id      int64
+		metrics metrics.System
+		online  bool
+	}
+	results := make(chan result, len(nodes))
+	workers := make(chan struct{}, nodeMetricsWorkers)
+	var wg sync.WaitGroup
+	for _, n := range nodes {
+		wg.Add(1)
+		go func(n model.Node) {
+			defer wg.Done()
+			select {
+			case workers <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			defer func() { <-workers }()
+			c := agent.New(n.Address, n.Token)
+			cctx, cancel := context.WithTimeout(ctx, nodeMetricsRequestTimeout)
+			m, err := c.Metrics(cctx)
+			cancel()
+			results <- result{id: n.ID, metrics: m, online: err == nil}
+		}(n)
+	}
+	wg.Wait()
+	close(results)
+
+	s.metricsMu.Lock()
+	defer s.metricsMu.Unlock()
+	if s.nodeMetrics == nil {
+		s.nodeMetrics = map[int64]nodeMetricSnapshot{}
+	}
+	active := make(map[int64]struct{}, len(nodes))
+	for _, n := range nodes {
+		active[n.ID] = struct{}{}
+	}
+	for item := range results {
+		s.nodeMetrics[item.id] = nodeMetricSnapshot{metrics: item.metrics, online: item.online, sampledAt: time.Now().UnixMilli()}
+	}
+	for id := range s.nodeMetrics {
+		if _, ok := active[id]; !ok {
+			delete(s.nodeMetrics, id)
+		}
+	}
+}
+
+// nodeRows combines current node metadata with the last background metrics
+// snapshot. It never performs network I/O, keeping monitoring requests fast.
+func (s *Server) nodeRows(_ context.Context) ([]nodeRow, error) {
 	nodes, err := s.db.ListNodes()
 	if err != nil {
 		return nil, err
 	}
 	rows := make([]nodeRow, len(nodes))
-	var wg sync.WaitGroup
+	s.metricsMu.RLock()
+	defer s.metricsMu.RUnlock()
 	for i, n := range nodes {
-		rows[i] = nodeRow{
+		row := nodeRow{
 			ID: n.ID, Name: n.Name, Tag: n.Tag, Address: n.Address,
 			StartAt: n.StartAt, EndAt: n.EndAt,
 			StartAtDate: nodeDateInput(n.StartAt), EndAtDate: nodeDateInput(n.EndAt),
 			BillingCycle: n.BillingCycle, BillingCycleLabel: nodeBillingCycleLabel(n.BillingCycle),
 		}
-		wg.Add(1)
-		go func(i int, n model.Node) {
-			defer wg.Done()
-			c := agent.New(n.Address, n.Token)
-			cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
-			m, err := c.Metrics(cctx)
-			if err != nil {
-				return
-			}
-			rows[i].Online = true
-			rows[i].CPU = strconv.FormatFloat(m.CPUPercent, 'f', 1, 64) + "%"
-			rows[i].CPUCores = m.CPUCores
-			rows[i].Load1 = m.Load1
-			rows[i].Load5 = m.Load5
-			rows[i].Load15 = m.Load15
-			rows[i].Mem = metrics.Format(m.MemUsed) + " / " + metrics.Format(m.MemTotal)
-			rows[i].Disk = metrics.Format(m.DiskUsed) + " / " + metrics.Format(m.DiskTotal)
-			rows[i].CPUPercent = m.CPUPercent
-			rows[i].MemUsed = m.MemUsed
-			rows[i].MemTotal = m.MemTotal
-			rows[i].MemPercent = m.MemPercent
-			rows[i].DiskUsed = m.DiskUsed
-			rows[i].DiskTotal = m.DiskTotal
-			rows[i].DiskPercent = m.DiskPercent
-			rows[i].NetRxBytes = m.NetRxBytes
-			rows[i].NetTxBytes = m.NetTxBytes
-		}(i, n)
+		snapshot, ok := s.nodeMetrics[n.ID]
+		if !ok {
+			row.Pending = true
+			rows[i] = row
+			continue
+		}
+		row.Online = snapshot.online
+		row.SampledAt = snapshot.sampledAt
+		if snapshot.online {
+			applyNodeMetrics(&row, snapshot.metrics)
+		}
+		rows[i] = row
 	}
-	wg.Wait()
 	return rows, nil
+}
+
+func applyNodeMetrics(row *nodeRow, m metrics.System) {
+	row.CPU = strconv.FormatFloat(m.CPUPercent, 'f', 1, 64) + "%"
+	row.CPUCores = m.CPUCores
+	row.Load1 = m.Load1
+	row.Load5 = m.Load5
+	row.Load15 = m.Load15
+	row.Mem = metrics.Format(m.MemUsed) + " / " + metrics.Format(m.MemTotal)
+	row.Disk = metrics.Format(m.DiskUsed) + " / " + metrics.Format(m.DiskTotal)
+	row.CPUPercent = m.CPUPercent
+	row.MemUsed = m.MemUsed
+	row.MemTotal = m.MemTotal
+	row.MemPercent = m.MemPercent
+	row.DiskUsed = m.DiskUsed
+	row.DiskTotal = m.DiskTotal
+	row.DiskPercent = m.DiskPercent
+	row.NetRxBytes = m.NetRxBytes
+	row.NetTxBytes = m.NetTxBytes
 }
 
 func (s *Server) handleNodeCreate(w http.ResponseWriter, r *http.Request) {
@@ -395,6 +484,9 @@ func (s *Server) handleNodeDelete(w http.ResponseWriter, r *http.Request) {
 	s.pushedMu.Lock()
 	delete(s.pushed, id)
 	s.pushedMu.Unlock()
+	s.metricsMu.Lock()
+	delete(s.nodeMetrics, id)
+	s.metricsMu.Unlock()
 	writeJSON(w, map[string]any{"ok": true})
 }
 

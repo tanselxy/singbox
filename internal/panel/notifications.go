@@ -174,6 +174,11 @@ func (s *Server) checkNotifications(ctx context.Context) {
 	cooldown := time.Duration(cfg.CooldownMinutes) * time.Minute
 	offlineRepeat := time.Duration(cfg.OfflineRepeatHours) * time.Hour
 	for _, row := range rows {
+		// Freshly added nodes have no sample until the metrics poller completes.
+		// Do not treat that brief bootstrap period as an offline event.
+		if row.Pending {
+			continue
+		}
 		var reasons []string
 		if !row.Online {
 			if cfg.NotifyNodeOffline {

@@ -43,6 +43,7 @@ type clientRow struct {
 
 type dashboardData struct {
 	Prefix       string
+	Username     string
 	ServerIP     string
 	Active       bool
 	Clients      []clientRow
@@ -63,9 +64,10 @@ type dashboardSummary struct {
 }
 
 type systemStatus struct {
-	BBR      bool
-	Fail2ban bool
-	SSHPort  int
+	BBR               bool
+	Fail2ban          bool
+	Fail2banInstalled bool
+	SSHPort           int
 }
 
 type nodeView struct {
@@ -98,8 +100,9 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "login.html", map[string]any{
-		"Prefix": s.prefix,
-		"Error":  r.URL.Query().Get("error"),
+		"Prefix":   s.prefix,
+		"Error":    r.URL.Query().Get("error"),
+		"Username": s.loginUsername(),
 	})
 }
 
@@ -113,7 +116,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	if s.cfg.VerifyPassword(r.PostFormValue("password")) {
+	username := strings.TrimSpace(r.PostFormValue("username"))
+	if username == "" {
+		username = "admin" // allows password-only logins from older integrations.
+	}
+	if s.verifyCredentials(username, r.PostFormValue("password")) {
 		s.auth.recordSuccess(ip)
 		s.auth.issueSession(w, true)
 		http.Redirect(w, r, s.prefix+"/dashboard", http.StatusSeeOther)
@@ -121,6 +128,61 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auth.recordFailure(ip)
 	http.Redirect(w, r, s.prefix+"/login?error=invalid", http.StatusSeeOther)
+}
+
+func (s *Server) loginUsername() string {
+	s.accountMu.RLock()
+	defer s.accountMu.RUnlock()
+	return s.cfg.LoginUsername()
+}
+
+func (s *Server) verifyCredentials(username, password string) bool {
+	s.accountMu.RLock()
+	defer s.accountMu.RUnlock()
+	return s.cfg.VerifyCredentials(username, password)
+}
+
+func (s *Server) handleAccountUpdate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "表单格式错误"})
+		return
+	}
+	username := strings.TrimSpace(r.PostFormValue("username"))
+	currentPassword := r.PostFormValue("current_password")
+	newPassword := r.PostFormValue("new_password")
+	confirmPassword := r.PostFormValue("confirm_password")
+	if currentPassword == "" {
+		writeJSON(w, map[string]any{"ok": false, "error": "请输入当前密码"})
+		return
+	}
+	if newPassword == "" && confirmPassword != "" {
+		writeJSON(w, map[string]any{"ok": false, "error": "请输入新密码"})
+		return
+	}
+	if newPassword != "" && newPassword != confirmPassword {
+		writeJSON(w, map[string]any{"ok": false, "error": "两次输入的新密码不一致"})
+		return
+	}
+
+	s.accountMu.Lock()
+	defer s.accountMu.Unlock()
+	if !s.cfg.VerifyCredentials(s.cfg.LoginUsername(), currentPassword) {
+		writeJSON(w, map[string]any{"ok": false, "error": "当前密码不正确"})
+		return
+	}
+	if newPassword == "" {
+		newPassword = currentPassword
+	}
+	if err := s.cfg.SetCredentials(username, newPassword); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	if err := s.auth.rotateKey(s.cfg.SessionKey); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	s.auth.clearSession(w)
+	writeJSON(w, map[string]any{"ok": true, "relogin": true})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -202,13 +264,15 @@ func (s *Server) dashboardData(ctx context.Context) (dashboardData, error) {
 	selfURL := selfAgentURL(srv, s.cfg.Port)
 	return dashboardData{
 		Prefix:   s.prefix,
+		Username: s.loginUsername(),
 		ServerIP: srv.ServerIP,
 		Active:   singbox.IsActive(ctx),
 		Clients:  rows,
 		System: systemStatus{
-			BBR:      system.BBREnabled(ctx),
-			Fail2ban: system.Fail2banActive(ctx),
-			SSHPort:  system.CurrentSSHPort(),
+			BBR:               system.BBREnabled(ctx),
+			Fail2ban:          system.Fail2banActive(ctx),
+			Fail2banInstalled: system.Fail2banInstalled(),
+			SSHPort:           system.CurrentSSHPort(),
 		},
 		Version:      Version,
 		Summary:      summary,
@@ -227,6 +291,8 @@ func (s *Server) handleSystemAction(w http.ResponseWriter, r *http.Request) {
 		err = system.OptimizeNetwork(ctx)
 	case "fail2ban":
 		err = system.SetupFail2ban(ctx, detectManager())
+	case "fail2ban-uninstall":
+		err = system.RemoveFail2ban(ctx, detectManager())
 	case "ssh-port":
 		port, perr := strconv.Atoi(strings.TrimSpace(r.PostFormValue("port")))
 		if perr != nil {
@@ -243,6 +309,22 @@ func (s *Server) handleSystemAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true})
+}
+
+func (s *Server) handleFail2banBans(w http.ResponseWriter, r *http.Request) {
+	page := parseIntDefault(r.URL.Query().Get("page"), 1)
+	bans, err := system.ListFail2banBans(r.Context(), page, 25)
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{
+		"ok":        true,
+		"bans":      bans.Bans,
+		"page":      bans.Page,
+		"page_size": bans.PageSize,
+		"total":     bans.Total,
+	})
 }
 
 // detectManager returns the host package manager, defaulting to apt.
@@ -729,14 +811,14 @@ func expiryLabel(expiresAt int64) string {
 	if expiresAt <= 0 {
 		return "永久"
 	}
-	return expiryInputDate(expiresAt)
+	return time.Unix(expiresAt, 0).UTC().Format("2006-01-02 15:04")
 }
 
 func expiryInputDate(expiresAt int64) string {
 	if expiresAt <= 0 {
 		return ""
 	}
-	return time.Unix(expiresAt-1, 0).UTC().Format("2006-01-02")
+	return time.Unix(expiresAt, 0).UTC().Format("2006-01-02T15:04")
 }
 
 // parseQuota converts a value + unit ("MB" or "GB") into bytes. 0 = unlimited.
@@ -768,12 +850,15 @@ func parseIntDefault(s string, def int) int {
 	return n
 }
 
-// parseExpiry parses a yyyy-mm-dd date (client's local calendar day) into a unix
-// timestamp at end of that day (UTC). Empty means never expire (0).
+// parseExpiry accepts an exact datetime-local value in UTC. It also accepts the
+// former yyyy-mm-dd form so existing clients retain their end-of-day behavior.
 func parseExpiry(s string) int64 {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return 0
+	}
+	if t, err := time.Parse("2006-01-02T15:04", s); err == nil {
+		return t.Unix()
 	}
 	t, err := time.Parse("2006-01-02", s)
 	if err != nil {

@@ -49,15 +49,26 @@ type Client struct {
 	http    *http.Client
 }
 
+// sharedHTTPClient keeps idle TLS connections for every registered node. The
+// transport pools connections per host, so sharing it is safe and avoids a new
+// handshake on each monitoring sample.
+var sharedHTTPClient = &http.Client{
+	Timeout: 10 * time.Second,
+	Transport: &http.Transport{
+		Proxy:               http.ProxyFromEnvironment,
+		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+		MaxIdleConns:        128,
+		MaxIdleConnsPerHost: 16,
+		IdleConnTimeout:     90 * time.Second,
+	},
+}
+
 // New builds an agent client for a node base URL (e.g. https://ip:port).
 func New(baseURL, token string) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		token:   token,
-		http: &http.Client{
-			Timeout:   10 * time.Second,
-			Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-		},
+		http:    sharedHTTPClient,
 	}
 }
 

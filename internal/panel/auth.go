@@ -25,7 +25,7 @@ const (
 type auth struct {
 	key []byte
 
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	attempts map[string]*attemptState
 }
 
@@ -90,9 +90,24 @@ func (a *auth) validSession(r *http.Request) bool {
 }
 
 func (a *auth) sign(msg string) string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	m := hmac.New(sha256.New, a.key)
 	m.Write([]byte(msg))
 	return hex.EncodeToString(m.Sum(nil))
+}
+
+// rotateKey invalidates all current sessions by replacing their signing key.
+func (a *auth) rotateKey(hexKey string) error {
+	key, err := hex.DecodeString(hexKey)
+	if err != nil {
+		return fmt.Errorf("decode session key: %w", err)
+	}
+	a.mu.Lock()
+	a.key = key
+	a.attempts = map[string]*attemptState{}
+	a.mu.Unlock()
+	return nil
 }
 
 // locked reports whether ip is currently locked out.

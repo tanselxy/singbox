@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"io"
@@ -10,11 +11,56 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/tanselxy/singbox/internal/metrics"
 	"github.com/tanselxy/singbox/internal/model"
 	"github.com/tanselxy/singbox/internal/state"
 	"github.com/tanselxy/singbox/internal/store"
 )
+
+func TestNodeRowsUseCachedMetrics(t *testing.T) {
+	dir := t.TempDir()
+	ConfigPath = filepath.Join(dir, "panel.json")
+	state.ServerPath = filepath.Join(dir, "server.json")
+	state.DBPath = filepath.Join(dir, "panel.db")
+	if err := state.SaveServer(sampleServer()); err != nil {
+		t.Fatal(err)
+	}
+	db, err := store.Open(state.DBPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node, err := db.CreateNode(model.Node{Name: "cached-node", Address: "https://192.0.2.1:54622", Token: "node-token", CreatedAt: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+
+	cfg := Config{PathPrefix: "abc", SessionKey: hex.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))}
+	srv, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.db.Close() })
+	srv.metricsMu.Lock()
+	srv.nodeMetrics[node.ID] = nodeMetricSnapshot{
+		metrics: metrics.System{CPUPercent: 12.5, CPUCores: 2, MemUsed: 256 << 20, MemTotal: 1 << 30},
+		online:  true, sampledAt: 1234,
+	}
+	srv.metricsMu.Unlock()
+
+	rows, err := srv.nodeRows(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Pending || !rows[0].Online {
+		t.Fatalf("cached node row = %#v", rows)
+	}
+	if rows[0].CPU != "12.5%" || rows[0].SampledAt != 1234 {
+		t.Fatalf("cached metrics were not applied: %#v", rows[0])
+	}
+}
 
 func testServer(t *testing.T) (*httptest.Server, Config) {
 	t.Helper()
@@ -61,8 +107,12 @@ func noRedirectClient() *http.Client {
 }
 
 func login(t *testing.T, ts *httptest.Server, password string) *http.Cookie {
+	return loginAs(t, ts, "admin", password)
+}
+
+func loginAs(t *testing.T, ts *httptest.Server, username, password string) *http.Cookie {
 	t.Helper()
-	resp, err := noRedirectClient().PostForm(ts.URL+"/abc/login", url.Values{"password": {password}})
+	resp, err := noRedirectClient().PostForm(ts.URL+"/abc/login", url.Values{"username": {username}, "password": {password}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,6 +134,20 @@ func TestLoginPageRenders(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("status = %d", resp.StatusCode)
+	}
+}
+
+func TestParseExpirySupportsMinutePrecision(t *testing.T) {
+	got := parseExpiry("2030-02-03T04:05")
+	want := time.Date(2030, time.February, 3, 4, 5, 0, 0, time.UTC).Unix()
+	if got != want {
+		t.Fatalf("parseExpiry() = %d, want %d", got, want)
+	}
+	if displayed := expiryInputDate(got); displayed != "2030-02-03T04:05" {
+		t.Fatalf("expiry input = %q", displayed)
+	}
+	if label := expiryLabel(got); label != "2030-02-03 04:05" {
+		t.Fatalf("expiry label = %q", label)
 	}
 }
 
@@ -144,6 +208,54 @@ func TestLoginWrongPasswordNoSession(t *testing.T) {
 	ts, _ := testServer(t)
 	if c := login(t, ts, "wrong"); c != nil {
 		t.Fatal("wrong password must not issue a session")
+	}
+}
+
+func TestAccountUpdateChangesCredentialsAndInvalidatesSessions(t *testing.T) {
+	ts, _ := testServer(t)
+	cookie := login(t, ts, "s3cret-pass")
+	if cookie == nil {
+		t.Fatal("initial login failed")
+	}
+	form := url.Values{
+		"username":         {"operator"},
+		"current_password": {"s3cret-pass"},
+		"new_password":     {"new-secure-password"},
+		"confirm_password": {"new-secure-password"},
+	}
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/abc/api/account", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("account update status = %d", resp.StatusCode)
+	}
+	if !strings.Contains(readBody(t, resp), `"ok":true`) {
+		t.Fatal("account update should succeed")
+	}
+
+	oldSessionReq, _ := http.NewRequest(http.MethodGet, ts.URL+"/abc/dashboard", nil)
+	oldSessionReq.AddCookie(cookie)
+	oldSessionResp, err := noRedirectClient().Do(oldSessionReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer oldSessionResp.Body.Close()
+	if oldSessionResp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("old session status = %d, want redirect", oldSessionResp.StatusCode)
+	}
+	if loginAs(t, ts, "admin", "s3cret-pass") != nil {
+		t.Fatal("old credentials should no longer work")
+	}
+	if loginAs(t, ts, "operator", "new-secure-password") == nil {
+		t.Fatal("new credentials should work")
 	}
 }
 

@@ -3,27 +3,52 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>登录 · Sing-Box 面板</title>
+  <meta name="color-scheme" content="light">
+  <title>登录 · Singbox 控制台</title>
   <link rel="stylesheet" href="{{.Prefix}}/static/dashboard.css">
 </head>
-<body class="grid min-h-screen place-items-center bg-background p-4 text-foreground antialiased">
-  <form class="w-full max-w-sm space-y-5 rounded-xl border bg-card p-6 shadow-sm" method="post" action="{{.Prefix}}/login">
-    <div>
-      <h1 class="text-lg font-semibold tracking-tight">Sing-Box 面板</h1>
-      <p class="mt-1 text-sm text-muted-foreground">请输入密码登录</p>
+<body class="min-h-screen bg-[#f6f7f9] text-foreground antialiased">
+  <main class="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-5 py-10 sm:px-0">
+    <div class="mb-8 flex items-center gap-3">
+      <div class="grid size-10 place-items-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground shadow-sm">S</div>
+      <div>
+        <div class="text-sm font-semibold">Singbox</div>
+        <div class="text-xs text-muted-foreground">控制台</div>
+      </div>
     </div>
-    {{if eq .Error "invalid"}}<p class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">密码错误</p>{{end}}
-    {{if eq .Error "locked"}}<p class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">尝试过于频繁，请稍后再试</p>{{end}}
-    <label class="flex flex-col gap-1.5 text-sm font-medium">
-      密码
-      <input
-        type="password" name="password" autofocus autocomplete="current-password" required
-        class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
-    </label>
-    <button type="submit"
-      class="inline-flex h-9 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs transition-colors hover:bg-primary/90 cursor-pointer">
-      登录
-    </button>
-  </form>
+
+    <form class="rounded-xl border bg-card p-6 shadow-sm sm:p-8" method="post" action="{{.Prefix}}/login">
+      <div class="mb-7">
+        <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Secure access</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight">登录控制台</h1>
+        <p class="mt-2 text-sm leading-6 text-muted-foreground">使用你的管理账户继续。</p>
+      </div>
+
+      {{if eq .Error "invalid"}}<p class="mb-5 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">用户名或密码不正确</p>{{end}}
+      {{if eq .Error "locked"}}<p class="mb-5 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">尝试过于频繁，请稍后再试</p>{{end}}
+
+      <div class="space-y-4">
+        <label class="flex flex-col gap-1.5 text-sm font-medium">
+          用户名
+          <input
+            type="text" name="username" value="{{.Username}}" autofocus autocomplete="username" required
+            class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+        </label>
+        <label class="flex flex-col gap-1.5 text-sm font-medium">
+          密码
+          <input
+            type="password" name="password" autocomplete="current-password" required
+            class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+        </label>
+      </div>
+
+      <button type="submit"
+        class="mt-7 inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 cursor-pointer">
+        登录
+      </button>
+    </form>
+
+    <p class="mt-5 text-center text-xs text-muted-foreground">受保护的管理入口</p>
+  </main>
 </body>
 </html>

@@ -96,7 +96,7 @@ export function Notifications({ prefix }) {
             <CardTitle>Telegram</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <ToggleRow
+            <SettingToggle
               label="启用 TG 通知"
               checked={config.telegram_enabled}
               onChange={(checked) => update({ telegram_enabled: checked })}
@@ -127,53 +127,66 @@ export function Notifications({ prefix }) {
           <CardHeader>
             <CardTitle>通知规则</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <ToggleRow
+          <CardContent className="pt-0">
+            <div className="divide-y">
+            <RuleRow
+              id="notify-node-offline"
               label="节点离线"
+              description="节点首次离线时立即通知"
               checked={config.notify_node_offline}
               onChange={(checked) => update({ notify_node_offline: checked })}
+              control={
+                <CompactNumber
+                  label="重复提醒间隔"
+                  value={config.offline_repeat_hours}
+                  onChange={(value) => update({ offline_repeat_hours: value })}
+                  disabled={!config.notify_node_offline}
+                  min="0"
+                  max="720"
+                  unit="小时"
+                />
+              }
             />
-            <Label>持续离线重复提醒（小时）
-              <Input
-                value={config.offline_repeat_hours}
-                onChange={(e) => update({ offline_repeat_hours: Number(e.target.value) })}
-                type="number"
-                min="0"
-                max="720"
-                disabled={!config.notify_node_offline}
-                placeholder="0 = 不重复提醒"
-              />
-            </Label>
-            <ThresholdRow
-              label="CPU"
+            <RuleRow
+              id="notify-cpu"
+              label="CPU 使用率"
+              description="使用率达到设定值时通知"
               enabled={config.notify_cpu}
               value={config.cpu_threshold}
               onEnabled={(checked) => update({ notify_cpu: checked })}
               onValue={(value) => update({ cpu_threshold: value })}
             />
-            <ThresholdRow
-              label="内存"
+            <RuleRow
+              id="notify-memory"
+              label="内存使用率"
+              description="使用率达到设定值时通知"
               enabled={config.notify_memory}
               value={config.memory_threshold}
               onEnabled={(checked) => update({ notify_memory: checked })}
               onValue={(value) => update({ memory_threshold: value })}
             />
-            <ThresholdRow
-              label="硬盘"
+            <RuleRow
+              id="notify-disk"
+              label="硬盘使用率"
+              description="使用率达到设定值时通知"
               enabled={config.notify_disk}
               value={config.disk_threshold}
               onEnabled={(checked) => update({ notify_disk: checked })}
               onValue={(value) => update({ disk_threshold: value })}
             />
-            <Label>指标通知冷却（分钟）
-              <Input
+            </div>
+            <div className="grid gap-4 border-t pt-5 sm:grid-cols-2">
+              <CompactField
+                label="指标通知冷却"
+                description="同一指标再次提醒前的间隔"
                 value={config.cooldown_minutes}
-                onChange={(e) => update({ cooldown_minutes: Number(e.target.value) })}
-                type="number"
+                onChange={(value) => update({ cooldown_minutes: value })}
                 min="1"
                 max="1440"
+                unit="分钟"
               />
-            </Label>
+              <div className="self-end pb-1 text-sm text-muted-foreground">阈值规则会分别记录冷却时间。</div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -181,9 +194,9 @@ export function Notifications({ prefix }) {
   );
 }
 
-function ToggleRow({ label, checked, onChange }) {
+function SettingToggle({ label, checked, onChange }) {
   return (
-    <label className="flex items-center justify-between gap-3 rounded-lg border bg-background px-3 py-2 text-sm font-medium">
+    <label className="flex items-center justify-between gap-3 text-sm font-medium">
       <span>{label}</span>
       <input
         className="h-4 w-4 accent-primary"
@@ -195,21 +208,63 @@ function ToggleRow({ label, checked, onChange }) {
   );
 }
 
-function ThresholdRow({ label, enabled, value, onEnabled, onValue }) {
+function RuleRow({ id, label, description, checked, onChange, enabled, value, onEnabled, onValue, control }) {
+  const active = checked ?? enabled;
+  const updateActive = onChange || onEnabled;
   return (
-    <div className="rounded-lg border bg-background p-3">
-      <ToggleRow label={`${label} 超阈值`} checked={enabled} onChange={onEnabled} />
-      <div className="mt-3 flex items-center gap-2">
-        <Input
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-4">
+      <div className="flex min-w-0 items-start gap-3">
+        <input
+          id={id}
+          className="mt-1 h-4 w-4 shrink-0 accent-primary"
+          type="checkbox"
+          checked={Boolean(active)}
+          onChange={(event) => updateActive(event.target.checked)}
+        />
+        <div className="min-w-0">
+          <label htmlFor={id} className="cursor-pointer text-sm font-medium">{label}</label>
+          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      {control || (
+        <CompactNumber
+          label={`${label} 阈值`}
           value={value}
-          onChange={(e) => onValue(Number(e.target.value))}
-          type="number"
+          onChange={onValue}
+          disabled={!active}
           min="1"
           max="100"
-          disabled={!enabled}
+          unit="%"
         />
-        <span className="text-sm text-muted-foreground">%</span>
-      </div>
+      )}
     </div>
+  );
+}
+
+function CompactNumber({ label, value, onChange, disabled, min, max, unit }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        aria-label={label}
+        className="h-8 w-20 text-right tabular-nums"
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        type="number"
+        min={min}
+        max={max}
+        disabled={disabled}
+      />
+      <span className="w-8 text-xs text-muted-foreground">{unit}</span>
+    </div>
+  );
+}
+
+function CompactField({ label, description, value, onChange, min, max, unit }) {
+  return (
+    <Label className="gap-2">
+      <span>{label}</span>
+      <span className="text-xs font-normal text-muted-foreground">{description}</span>
+      <CompactNumber label={label} value={value} onChange={onChange} min={min} max={max} unit={unit} />
+    </Label>
   );
 }

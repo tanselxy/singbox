@@ -7,6 +7,8 @@ import { Label } from "../../ui/label.jsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../ui/table.jsx";
 import { cn } from "../../lib/utils.js";
 
+const MONITORING_REFRESH_INTERVAL = 2000;
+
 export function Monitoring({ prefix, publicView = false, apiPath = "" }) {
   const [nodes, setNodes] = useState([]);
   const [mode, setMode] = useState("charts");
@@ -19,7 +21,7 @@ export function Monitoring({ prefix, publicView = false, apiPath = "" }) {
 
   async function load() {
     try {
-      const res = await fetch(apiPath || `${prefix}/api/node-metrics`);
+      const res = await fetch(apiPath || `${prefix}/api/node-metrics`, { cache: "no-store" });
       const payload = await res.json();
       if (payload.ok) {
         const nextNodes = (payload.nodes || []).map(normalizeNodeMetrics);
@@ -30,8 +32,11 @@ export function Monitoring({ prefix, publicView = false, apiPath = "" }) {
           nextNodes.forEach((node) => {
             if (!node.Online) return;
             const items = next[node.ID] ? [...next[node.ID]] : [];
+            const sampleTime = Number(node.SampledAt || sampledAt);
+            if (items.at(-1)?.sampleTime === sampleTime) return;
             items.push({
-              t: sampledAt,
+              t: sampleTime,
+              sampleTime,
               netRx: node.NetRxBytes,
               netTx: node.NetTxBytes,
             });
@@ -49,7 +54,7 @@ export function Monitoring({ prefix, publicView = false, apiPath = "" }) {
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, 10000);
+    const timer = setInterval(load, MONITORING_REFRESH_INTERVAL);
     return () => clearInterval(timer);
   }, []);
 
@@ -294,6 +299,7 @@ function MonitoringCharts({ nodes, history, loading, publicView, onEdit, onRenew
 function NodeMetricCard({ node, history, publicView, onEdit, onRenew, onDelete }) {
   const rates = networkRates(history);
   const tags = splitTags(node.Tag);
+  const statusLabel = node.Pending ? "采集中" : node.Online ? "在线" : "离线";
   return (
     <div className="w-full max-w-xl rounded-xl border bg-card p-4 shadow-sm">
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -301,13 +307,13 @@ function NodeMetricCard({ node, history, publicView, onEdit, onRenew, onDelete }
           <h4 className="truncate font-medium">{node.Name}</h4>
           {!publicView && <p className="truncate font-mono text-xs text-muted-foreground">{node.Address}</p>}
         </div>
-        <Badge active={node.Online}>{node.Online ? "在线" : "离线"}</Badge>
+        <Badge active={node.Online}>{statusLabel}</Badge>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <MetricBlock label="CPU" sub={`${node.CPUCores || "-"} 核`} value={`${node.CPUPercent.toFixed(1)}%`} percent={node.CPUPercent} tone="text-chart-1" />
+        <MetricBlock label="CPU" sub={`${node.CPUCores || "-"} 核`} value={node.Online ? `${node.CPUPercent.toFixed(1)}%` : "-"} percent={node.CPUPercent} tone="text-chart-1" />
         <MetricBlock label="内存" value={node.Mem || "-"} percent={node.MemPercent} tone="text-chart-2" />
         <MetricBlock label="硬盘" value={node.Disk || "-"} percent={node.DiskPercent} tone="text-chart-3" />
-        <MetricBlock label="负载" value={formatLoad(node.Load1)} percent={loadPercent(node)} tone="text-chart-4" />
+        <MetricBlock label="负载" value={node.Online ? formatLoad(node.Load1) : "-"} percent={loadPercent(node)} tone="text-chart-4" />
       </div>
       <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2 lg:grid-cols-4">
         <MiniMetric label="上行" value={rates.upRate} />
@@ -397,9 +403,9 @@ function MonitoringTable({ nodes, history, loading, publicView, onEdit, onRenew,
             <TableRow key={node.ID}>
               <TableCell>{node.Name}</TableCell>
               {!publicView && <TableCell className="font-mono text-xs text-muted-foreground">{node.Address}</TableCell>}
-              <TableCell><Badge active={node.Online}>{node.Online ? "在线" : "离线"}</Badge></TableCell>
+              <TableCell><Badge active={node.Online}>{node.Pending ? "采集中" : node.Online ? "在线" : "离线"}</Badge></TableCell>
               <TableCell>{node.CPU || "-"}</TableCell>
-              <TableCell>{formatLoad(node.Load1)}</TableCell>
+              <TableCell>{node.Online ? formatLoad(node.Load1) : "-"}</TableCell>
               <TableCell>{node.Mem || "-"}</TableCell>
               <TableCell>{node.Disk || "-"}</TableCell>
               <TableCell>{rates.upRate}</TableCell>

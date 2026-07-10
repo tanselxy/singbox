@@ -4,12 +4,14 @@ package panel
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -31,6 +33,7 @@ var (
 type Config struct {
 	Port         int    `json:"port"`
 	PathPrefix   string `json:"path_prefix"` // random URL prefix, no slashes
+	Username     string `json:"username"`
 	PasswordHash string `json:"password_hash"`
 	SessionKey   string `json:"session_key"` // hex, HMAC key for signed cookies
 	CertFile     string `json:"cert_file"`
@@ -55,11 +58,19 @@ func EnsureConfig() (Config, string, error) {
 		if err := json.Unmarshal(b, &c); err != nil {
 			return Config{}, "", fmt.Errorf("parse panel config: %w", err)
 		}
-		// Backfill an agent token for configs created before multi-node support.
+		changed := false
+		// Backfill settings for configs created before these fields existed.
 		if c.AgentToken == "" {
 			if c.AgentToken, err = randHex(24); err != nil {
 				return Config{}, "", err
 			}
+			changed = true
+		}
+		if c.Username == "" {
+			c.Username = "admin"
+			changed = true
+		}
+		if changed {
 			if err := c.save(); err != nil {
 				return Config{}, "", err
 			}
@@ -114,6 +125,7 @@ func generateConfig() (Config, string, error) {
 	return Config{
 		Port:         port,
 		PathPrefix:   prefix,
+		Username:     "admin",
 		PasswordHash: string(hash),
 		SessionKey:   sessionKey,
 		CertFile:     panelCertFile,
@@ -147,6 +159,23 @@ func (c Config) VerifyPassword(password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(c.PasswordHash), []byte(password)) == nil
 }
 
+// LoginUsername keeps admin as the default for panel files created before
+// username support was introduced.
+func (c Config) LoginUsername() string {
+	if username := strings.TrimSpace(c.Username); username != "" {
+		return username
+	}
+	return "admin"
+}
+
+// VerifyCredentials checks both values without skipping the password hash
+// comparison when the username is wrong.
+func (c Config) VerifyCredentials(username, password string) bool {
+	nameOK := subtle.ConstantTimeCompare([]byte(strings.TrimSpace(username)), []byte(c.LoginUsername())) == 1
+	passwordOK := c.VerifyPassword(password)
+	return nameOK && passwordOK
+}
+
 // SetPassword updates the stored hash and persists the config.
 func (c *Config) SetPassword(password string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -155,6 +184,43 @@ func (c *Config) SetPassword(password string) error {
 	}
 	c.PasswordHash = string(hash)
 	return c.save()
+}
+
+// SetCredentials persists a new login name and password, and rotates the
+// session signing key so every existing browser session becomes invalid.
+func (c *Config) SetCredentials(username, password string) error {
+	username = strings.TrimSpace(username)
+	if !validUsername(username) {
+		return fmt.Errorf("用户名需为 3-32 位字母、数字、点、下划线或连字符")
+	}
+	if len(password) < 8 {
+		return fmt.Errorf("密码至少需要 8 位")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	sessionKey, err := randHex(32)
+	if err != nil {
+		return err
+	}
+	c.Username = username
+	c.PasswordHash = string(hash)
+	c.SessionKey = sessionKey
+	return c.save()
+}
+
+func validUsername(username string) bool {
+	if len(username) < 3 || len(username) > 32 {
+		return false
+	}
+	for _, char := range username {
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '.' || char == '_' || char == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func randPort(lo, hi int) (int, error) {

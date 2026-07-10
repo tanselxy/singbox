@@ -185,7 +185,7 @@ export function Clients({ data, refresh, prefix }) {
                 <TableHead>配额</TableHead>
                 <TableHead>设备</TableHead>
                 <TableHead>到期</TableHead>
-                <TableHead>操作</TableHead>
+                <TableHead className="text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -215,8 +215,8 @@ export function Clients({ data, refresh, prefix }) {
                     <div className="mt-1 text-xs text-muted-foreground">限制：{client.Devices}</div>
                   </TableCell>
                   <TableCell className={client.Expired ? "text-destructive" : ""}>{client.Expiry}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1.5">
+                  <TableCell className="text-right">
+                    <div className="flex flex-wrap justify-end gap-1.5">
                       <Button variant="outline" size="sm" onClick={() => openEdit(client)}>编辑</Button>
                       <Button variant="outline" size="sm" onClick={() => clientAction(client, "reset-subscription")}>重置订阅</Button>
                       <Button variant="outline" size="sm" onClick={() => copySubscription(client)}>复制订阅</Button>
@@ -326,8 +326,8 @@ function ClientCreateDialog({ open, form, creating, editing, onChange, onCancel,
       <Label>设备数
         <Input value={form.devices} onChange={(e) => onChange({ ...form, devices: e.target.value })} type="number" min="0" step="1" placeholder="0 = 不限" />
       </Label>
-      <Label>到期日期
-        <Input value={form.expires} onChange={(e) => onChange({ ...form, expires: e.target.value })} type="date" title="到期日期（留空=永久）" />
+      <Label>到期时间
+        <Input value={form.expires} onChange={(e) => onChange({ ...form, expires: e.target.value })} type="datetime-local" step="60" title="到期时间（精确到分钟，留空=永久）" />
       </Label>
     </ModalFrame>
   );
