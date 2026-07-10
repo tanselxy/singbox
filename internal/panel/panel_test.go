@@ -167,13 +167,13 @@ func TestSubscriptionByToken(t *testing.T) {
 	}
 	if got := resp.Header.Get("Subscription-Userinfo"); strings.Contains(got, "upload=") || strings.Contains(got, "download=") || strings.Contains(got, "total=") {
 		t.Fatalf("subscription traffic header should be human-readable, got %q", got)
-	} else if !strings.Contains(got, "当前已使用") || !strings.Contains(got, "流量总额度") {
+	} else if !strings.Contains(got, "Used") || !strings.Contains(got, "Total") {
 		t.Fatalf("subscription should include human traffic header, got %q", got)
 	}
 	if got := resp.Header.Get("Profile-Title"); got == "" {
 		t.Fatal("subscription should include profile title")
 	}
-	if got := resp.Header.Get("X-Subscription-Usage"); !strings.Contains(got, "当前已使用") || !strings.Contains(got, "流量总额度") {
+	if got := resp.Header.Get("X-Subscription-Usage"); !strings.Contains(got, "Used") || !strings.Contains(got, "Total") {
 		t.Fatalf("subscription should include human usage title, got %q", got)
 	}
 
@@ -186,7 +186,7 @@ func TestSubscriptionByToken(t *testing.T) {
 
 func TestSubscriptionUsageTitleUsesMBBelowGB(t *testing.T) {
 	got := subscriptionUsageTitle(512*1024*1024, 900*1024*1024)
-	if got != "当前已使用512.00 MB流量/流量总额度900.00 MB" {
+	if got != "Used 512.00 MB / Total 900.00 MB" {
 		t.Fatalf("title = %q", got)
 	}
 }

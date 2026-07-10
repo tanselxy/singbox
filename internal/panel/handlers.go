@@ -457,17 +457,17 @@ func (s *Server) writeSubscriptionHeaders(w http.ResponseWriter, c model.Client)
 	used := tr.Up + tr.Down
 	display := subscriptionUsageTitle(used, c.QuotaBytes)
 	w.Header().Set("Subscription-Userinfo", display)
-	w.Header().Set("Profile-Title", url.QueryEscape(display))
+	w.Header().Set("Profile-Title", url.QueryEscape(c.Name))
 	w.Header().Set("Profile-Update-Interval", "24")
 	w.Header().Set("X-Subscription-Usage", display)
 }
 
 func subscriptionUsageTitle(usedBytes, quotaBytes int64) string {
-	total := "不限"
+	total := "Unlimited"
 	if quotaBytes > 0 {
 		total = compactTrafficUnit(quotaBytes)
 	}
-	return fmt.Sprintf("当前已使用%s流量/流量总额度%s", compactTrafficUnit(usedBytes), total)
+	return fmt.Sprintf("Used %s / Total %s", compactTrafficUnit(usedBytes), total)
 }
 
 func compactTrafficUnit(n int64) string {
